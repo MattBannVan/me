@@ -283,7 +283,7 @@
 
     const formatDate = (iso) => {
       const parsed = new Date(iso);
-      if (Number.isNaN(parsed.getTime())) return 'Unknown date';
+      if (Number.isNaN(parsed.getTime())) return 'Date unavailable';
       return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
@@ -380,7 +380,7 @@
           frame.title = `Preview for ${chat.title}`;
           frame.loading = 'lazy';
           frame.referrerPolicy = 'strict-origin-when-cross-origin';
-          frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms');
+          frame.setAttribute('sandbox', 'allow-scripts');
           preview.append(frame);
         } else {
           const unavailable = document.createElement('p');
