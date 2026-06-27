@@ -380,7 +380,7 @@
           frame.title = `Preview for ${chat.title}`;
           frame.loading = 'lazy';
           frame.referrerPolicy = 'no-referrer';
-          frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+          frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms');
           preview.append(frame);
         } else {
           const unavailable = document.createElement('p');
