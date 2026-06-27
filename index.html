@@ -248,7 +248,7 @@
   </div>
 
   <script>
-    const chatLinks = [
+    const chatItems = [
       {
         title: 'Shared Claude conversation',
         url: 'https://claude.ai/share/daedda94-d9b0-4027-a474-e1df05db43c7',
@@ -283,7 +283,7 @@
 
     const formatDate = (iso) => {
       const parsed = new Date(iso);
-      if (Number.isNaN(parsed.getTime())) return 'Date unavailable';
+      if (Number.isNaN(parsed.getTime())) return 'Invalid date format';
       return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
@@ -303,13 +303,13 @@
     };
 
     const render = () => {
-      const sorted = sortChats(chatLinks);
+      const sorted = sortChats(chatItems);
 
       if (!sorted.length) {
         list.textContent = '';
         const empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = 'No shared chats yet. Add items to the chatLinks array in index.html.';
+        empty.textContent = 'No shared chats yet. Add items to the chatItems array in index.html.';
         list.append(empty);
         return;
       }
