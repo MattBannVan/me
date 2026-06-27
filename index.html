@@ -277,25 +277,25 @@
     const canEmbed = (value) => {
       const parsed = getSafeUrl(value);
       if (!parsed) return false;
-      const host = parsed.hostname.toLowerCase();
-      return allowedPreviewHosts.has(host);
+      const hostname = parsed.hostname.toLowerCase();
+      return allowedPreviewHosts.has(hostname);
     };
 
     const formatDate = (iso) => {
       const parsed = new Date(iso);
-      if (Number.isNaN(parsed.getTime())) return 'Invalid date format';
+      if (Number.isNaN(parsed.getTime())) return 'Date unavailable';
       return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
     const sortChats = (items) => {
-      const dateDir = sortDate.value === 'asc' ? 1 : -1;
-      const modelDir = sortModel.value === 'asc' ? 1 : -1;
+      const dateSortDirection = sortDate.value === 'asc' ? 1 : -1;
+      const modelSortDirection = sortModel.value === 'asc' ? 1 : -1;
 
       return [...items].sort((a, b) => {
-        const dateCompare = a.date.localeCompare(b.date) * dateDir;
+        const dateCompare = a.date.localeCompare(b.date) * dateSortDirection;
         if (dateCompare !== 0) return dateCompare;
 
-        const modelCompare = a.model.localeCompare(b.model) * modelDir;
+        const modelCompare = a.model.localeCompare(b.model) * modelSortDirection;
         if (modelCompare !== 0) return modelCompare;
 
         return a.ai.localeCompare(b.ai);
