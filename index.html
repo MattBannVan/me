@@ -283,7 +283,7 @@
 
     const formatDate = (iso) => {
       const parsed = new Date(iso);
-      if (Number.isNaN(parsed.getTime())) return iso;
+      if (Number.isNaN(parsed.getTime())) return 'Unknown date';
       return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
@@ -292,7 +292,7 @@
       const modelDir = sortModel.value === 'asc' ? 1 : -1;
 
       return [...items].sort((a, b) => {
-        const dateCompare = (new Date(a.date).getTime() - new Date(b.date).getTime()) * dateDir;
+        const dateCompare = a.date.localeCompare(b.date) * dateDir;
         if (dateCompare !== 0) return dateCompare;
 
         const modelCompare = a.model.localeCompare(b.model) * modelDir;
@@ -379,7 +379,7 @@
           frame.src = safeUrl.toString();
           frame.title = `Preview for ${chat.title}`;
           frame.loading = 'lazy';
-          frame.referrerPolicy = 'no-referrer';
+          frame.referrerPolicy = 'strict-origin-when-cross-origin';
           frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms');
           preview.append(frame);
         } else {
