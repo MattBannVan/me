@@ -253,7 +253,7 @@
         title: 'Shared Claude conversation',
         url: 'https://claude.ai/share/daedda94-d9b0-4027-a474-e1df05db43c7',
         ai: 'Anthropic Claude',
-        model: 'Claude',
+        model: 'Claude Sonnet',
         date: '2026-06-27'
       }
     ];
@@ -262,8 +262,27 @@
     const sortDate = document.getElementById('sort-date');
     const sortModel = document.getElementById('sort-model');
 
+    const allowedPreviewHosts = new Set(['claude.ai', 'chatgpt.com', 'chat.openai.com', 'gemini.google.com']);
+
+    const getSafeUrl = (value) => {
+      try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== 'https:') return null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    };
+
+    const canEmbed = (value) => {
+      const parsed = getSafeUrl(value);
+      if (!parsed) return false;
+      const host = parsed.hostname.toLowerCase();
+      return allowedPreviewHosts.has(host);
+    };
+
     const formatDate = (iso) => {
-      const parsed = new Date(iso + 'T00:00:00');
+      const parsed = new Date(iso);
       if (Number.isNaN(parsed.getTime())) return iso;
       return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     };
@@ -287,42 +306,98 @@
       const sorted = sortChats(chatLinks);
 
       if (!sorted.length) {
-        list.innerHTML = '<div class="empty">No shared chats yet. Add items to the <code>chatLinks</code> array in <code>index.html</code>.</div>';
+        list.textContent = '';
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No shared chats yet. Add items to the chatLinks array in index.html.';
+        list.append(empty);
         return;
       }
 
-      list.innerHTML = sorted.map((chat, index) => `
-        <article class="chat-card">
-          <div class="card-head">
-            <div>
-              <h2 class="chat-title">${chat.title}</h2>
-              <div class="chat-meta">
-                <span class="chip">${chat.ai}</span>
-                <span class="chip">${chat.model}</span>
-                <span class="chip">${formatDate(chat.date)}</span>
-              </div>
-            </div>
-            <div class="actions">
-              <a class="btn btn-primary" href="${chat.url}" target="_blank" rel="noopener noreferrer">Open</a>
-              <button class="btn btn-tonal" data-toggle="preview-${index}" type="button">Preview</button>
-            </div>
-          </div>
-          <div class="preview" id="preview-${index}">
-            <p class="preview-note">If this provider blocks embeds, use Open to view in a new tab.</p>
-            <iframe src="${chat.url}" title="Preview for ${chat.title}" loading="lazy" referrerpolicy="no-referrer"></iframe>
-          </div>
-        </article>
-      `).join('');
+      list.textContent = '';
 
-      list.querySelectorAll('[data-toggle]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const id = button.getAttribute('data-toggle');
-          const section = document.getElementById(id);
-          if (!section) return;
+      sorted.forEach((chat, index) => {
+        const safeUrl = getSafeUrl(chat.url);
 
-          const active = section.classList.toggle('active');
-          button.textContent = active ? 'Hide' : 'Preview';
+        const card = document.createElement('article');
+        card.className = 'chat-card';
+
+        const head = document.createElement('div');
+        head.className = 'card-head';
+
+        const titleWrap = document.createElement('div');
+        const title = document.createElement('h2');
+        title.className = 'chat-title';
+        title.textContent = chat.title;
+
+        const meta = document.createElement('div');
+        meta.className = 'chat-meta';
+
+        [chat.ai, chat.model, formatDate(chat.date)].forEach((value) => {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = value;
+          meta.append(chip);
         });
+
+        titleWrap.append(title, meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const open = document.createElement('a');
+        open.className = 'btn btn-primary';
+        open.textContent = 'Open';
+        if (safeUrl) {
+          open.href = safeUrl.toString();
+          open.target = '_blank';
+          open.rel = 'noopener noreferrer';
+        } else {
+          open.removeAttribute('href');
+          open.style.opacity = '0.6';
+          open.style.pointerEvents = 'none';
+        }
+
+        const toggle = document.createElement('button');
+        toggle.className = 'btn btn-tonal';
+        toggle.type = 'button';
+        toggle.textContent = 'Preview';
+        toggle.disabled = !safeUrl || !canEmbed(chat.url);
+
+        const preview = document.createElement('div');
+        preview.className = 'preview';
+        preview.id = `preview-${index}`;
+
+        const note = document.createElement('p');
+        note.className = 'preview-note';
+        note.textContent = 'If this provider blocks embeds, use Open to view in a new tab.';
+
+        preview.append(note);
+
+        if (safeUrl && canEmbed(chat.url)) {
+          const frame = document.createElement('iframe');
+          frame.src = safeUrl.toString();
+          frame.title = `Preview for ${chat.title}`;
+          frame.loading = 'lazy';
+          frame.referrerPolicy = 'no-referrer';
+          frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+          preview.append(frame);
+        } else {
+          const unavailable = document.createElement('p');
+          unavailable.className = 'preview-note';
+          unavailable.textContent = 'Preview unavailable for this link.';
+          preview.append(unavailable);
+        }
+
+        toggle.addEventListener('click', () => {
+          const active = preview.classList.toggle('active');
+          toggle.textContent = active ? 'Hide' : 'Preview';
+        });
+
+        actions.append(open, toggle);
+        head.append(titleWrap, actions);
+        card.append(head, preview);
+        list.append(card);
       });
     };
 
