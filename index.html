@@ -292,13 +292,20 @@
       const modelSortDirection = sortModel.value === 'asc' ? 1 : -1;
 
       return [...items].sort((a, b) => {
-        const dateCompare = a.date.localeCompare(b.date) * dateSortDirection;
+        const aDate = typeof a.date === 'string' ? a.date : '';
+        const bDate = typeof b.date === 'string' ? b.date : '';
+        const aModel = typeof a.model === 'string' ? a.model : '';
+        const bModel = typeof b.model === 'string' ? b.model : '';
+        const aAi = typeof a.ai === 'string' ? a.ai : '';
+        const bAi = typeof b.ai === 'string' ? b.ai : '';
+
+        const dateCompare = aDate.localeCompare(bDate) * dateSortDirection;
         if (dateCompare !== 0) return dateCompare;
 
-        const modelCompare = a.model.localeCompare(b.model) * modelSortDirection;
+        const modelCompare = aModel.localeCompare(bModel) * modelSortDirection;
         if (modelCompare !== 0) return modelCompare;
 
-        return a.ai.localeCompare(b.ai);
+        return aAi.localeCompare(bAi);
       });
     };
 
@@ -318,6 +325,10 @@
 
       sorted.forEach((chat, index) => {
         const safeUrl = getSafeUrl(chat.url);
+        const chatTitle = typeof chat.title === 'string' ? chat.title : 'Untitled chat';
+        const chatAi = typeof chat.ai === 'string' ? chat.ai : 'Unknown AI';
+        const chatModel = typeof chat.model === 'string' ? chat.model : 'Unknown model';
+        const chatDate = formatDate(typeof chat.date === 'string' ? chat.date : '');
 
         const card = document.createElement('article');
         card.className = 'chat-card';
@@ -328,12 +339,12 @@
         const titleWrap = document.createElement('div');
         const title = document.createElement('h2');
         title.className = 'chat-title';
-        title.textContent = chat.title;
+        title.textContent = chatTitle;
 
         const meta = document.createElement('div');
         meta.className = 'chat-meta';
 
-        [chat.ai, chat.model, formatDate(chat.date)].forEach((value) => {
+        [chatAi, chatModel, chatDate].forEach((value) => {
           const chip = document.createElement('span');
           chip.className = 'chip';
           chip.textContent = value;
@@ -356,6 +367,8 @@
           open.removeAttribute('href');
           open.style.opacity = '0.6';
           open.style.pointerEvents = 'none';
+          open.setAttribute('aria-disabled', 'true');
+          open.setAttribute('tabindex', '-1');
         }
 
         const toggle = document.createElement('button');
@@ -377,7 +390,7 @@
         if (safeUrl && canEmbed(chat.url)) {
           const frame = document.createElement('iframe');
           frame.src = safeUrl.toString();
-          frame.title = `Preview for ${chat.title}`;
+          frame.title = `Preview for ${chatTitle}`;
           frame.loading = 'lazy';
           frame.referrerPolicy = 'strict-origin-when-cross-origin';
           frame.setAttribute('sandbox', 'allow-scripts');
