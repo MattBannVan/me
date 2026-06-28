@@ -1,7 +1,7 @@
 # Digital Clone Web Application
 
 ## Overview
-This repository contains the source code for a web-based digital clone application. The system features a 3D avatar that replicates the user's physical appearance, voice, and personality. It includes an admin GUI for continuous knowledge ingestion and agentic capabilities for executing tasks like email communication and image generation.
+This repository contains the source code for a web-based digital clone application. The system features a 3D avatar that replicates the user's physical appearance, voice, and personality. It includes an admin GUI for continuous knowledge ingestion and a orchestration command center.  A page highlighting some of the more memorable moments chatting with AI and interactive video clips with Matt Bannon are some ways to explore Matt Bannon Online.
 
 ## Core Features
 * **3D Interactive Avatar:** Real-time lip-sync and expressive animations synced to audio.
@@ -9,6 +9,7 @@ This repository contains the source code for a web-based digital clone applicati
 * **Personality & Knowledge (RAG):** LLM configured with custom system prompts and a Retrieval-Augmented Generation pipeline to reflect the user's personality and specific knowledge.
 * **Admin GUI:** Interface for the user to upload documents, text snippets, and preferences to the clone's vector database.
 * **Agentic Tools:** Integrated workflows for sending emails, generating images, and executing web-based tasks.
+* **Online Orchestration Command Center** * A web based portal to the self improving, self learning multi agentic production engine.
 
 ---
 
