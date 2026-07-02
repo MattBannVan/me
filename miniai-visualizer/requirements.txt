@@ -1,12 +1,14 @@
 # MiniAI Visualizer — Windows / NVIDIA RTX 5060 (Blackwell)
 #
-# IMPORTANT: install PyTorch FIRST with the CUDA 12.8 index (see README.md):
-#   pip install "torch>=2.7" --index-url https://download.pytorch.org/whl/cu128
+# The extra index below provides CUDA 12.8 (cu128) PyTorch wheels; pip picks
+# the +cu128 build over PyPI's CPU-only build because local versions sort
+# higher. The RTX 5060 is a Blackwell GPU (compute capability sm_120); wheels
+# older than PyTorch 2.7 / cu128 do NOT include sm_120 kernels and will fall
+# back to CPU or error out.
 #
-# The RTX 5060 is a Blackwell GPU (compute capability sm_120); wheels older
-# than PyTorch 2.7 / cu128 do NOT include sm_120 kernels and will fall back
-# to CPU or error out.
+#   pip install -r requirements.txt
 
+--extra-index-url https://download.pytorch.org/whl/cu128
 torch>=2.7
 customtkinter>=5.2.2
 safetensors>=0.4.3

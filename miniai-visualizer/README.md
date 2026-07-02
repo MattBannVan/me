@@ -19,8 +19,8 @@ miniai-visualizer/
 └── README.md
 ```
 
-- **`model.py`** owns every tensor. All parameters (`E`, `U`, `V`, `bh`, `W`,
-  `b`) are explicit `nn.Parameter`s — no `nn.Linear` black boxes — and the
+- **`model.py`** owns every tensor. All parameters (`E`, `U`, `Vin`, `bh`,
+  `W`, `b`) are explicit `nn.Parameter`s — no `nn.Linear` black boxes — and the
   output head is literally `z = W @ h + b`, executed on CUDA when available.
 - **`app.py`** never does math; it renders what the engine returns and calls
   back into it. The temperature slider re-softmaxes **cached** logits, so the
@@ -103,7 +103,7 @@ Per step, with hidden state `h ∈ ℝ³²` and vocab size `V = 36`:
 
 | Stage        | Formula                                  | Where shown            |
 |--------------|------------------------------------------|------------------------|
-| Context      | `h' = tanh(U·h + V·E[token] + bh)`       | math log (`h`, ‖h‖)    |
+| Context      | `h' = tanh(U·h + Vin·E[token] + bh)`     | math log (`h`, ‖h‖)    |
 | Logits       | `z = W·h + b`, `W ∈ ℝ^{V×32}, b ∈ ℝ^V`   | table col "logit z"    |
 | Temperature  | `z̃ = z / T`, `T ∈ [0.1, 2.0]`            | table col "z/T", live  |
 | Softmax      | `p_i = e^{z̃_i} / Σ_j e^{z̃_j}`            | table col "p" + bars   |

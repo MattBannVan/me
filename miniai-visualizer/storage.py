@@ -49,7 +49,8 @@ def save(engine, save_dir: Path | None = None) -> Path:
         "update_count": engine.update_count,
         "saved_at": datetime.now(timezone.utc).isoformat(),
     }
-    (save_dir / META_FILE).write_text(json.dumps(meta, indent=2))
+    (save_dir / META_FILE).write_text(json.dumps(meta, indent=2),
+                                      encoding="utf-8")
     return weights_path
 
 
@@ -64,13 +65,16 @@ def load(engine, save_dir: Path | None = None) -> bool:
 
     try:
         if meta_path.exists():
-            meta = json.loads(meta_path.read_text())
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
             if meta.get("vocab") != VOCAB or meta.get("d_model") != D_MODEL:
-                return False  # incompatible with current model definition
+                print(f"[storage] ignoring {weights_path}: saved vocab/dims "
+                      "don't match the current model definition")
+                return False
             engine.update_count = int(meta.get("update_count", 0))
         state = load_file(str(weights_path), device=str(engine.device))
         engine.model.load_state_dict(state)
         engine.reset()
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"[storage] failed to load {weights_path}: {exc}")
         return False
