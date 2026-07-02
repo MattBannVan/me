@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniAI Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --md-sys-color-primary: #d0bcff;
+      --md-sys-color-on-primary: #381e72;
+      --md-sys-color-primary-container: #4f378b;
+      --md-sys-color-on-primary-container: #eaddff;
+      --md-sys-color-surface: #141218;
+      --md-sys-color-surface-container: #211f26;
+      --md-sys-color-surface-container-high: #2b2930;
+      --md-sys-color-on-surface: #e6e0e9;
+      --md-sys-color-outline: #948f99;
+      --md-sys-color-secondary-container: #4a4458;
+      --md-sys-color-on-secondary-container: #e8def8;
+      --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+      --md-elevation-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 6px 14px rgba(0, 0, 0, 0.3);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 10%, #241d34 0%, var(--md-sys-color-surface) 40%);
+      color: var(--md-sys-color-on-surface);
+      min-height: 100vh;
+    }
+
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1rem 3rem;
+    }
+
+    .nav-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--md-sys-color-primary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 1.25rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      transition: background 120ms ease;
+    }
+
+    .nav-back:hover {
+      background: rgba(208, 188, 255, 0.1);
+    }
+
+    .hero {
+      background: linear-gradient(145deg, rgba(79, 55, 139, 0.95), rgba(54, 39, 89, 0.95));
+      border-radius: 28px;
+      padding: 1.5rem;
+      box-shadow: var(--md-elevation-2);
+      margin-bottom: 1.25rem;
+      border: 1px solid rgba(208, 188, 255, 0.25);
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(1.7rem, 4vw, 2.7rem);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin: 0.55rem 0 0;
+      color: #e7dfff;
+      font-size: 1rem;
+    }
+
+    .surface {
+      background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, black);
+      border: 1px solid rgba(148, 143, 153, 0.3);
+      border-radius: 24px;
+      padding: 1.5rem;
+      box-shadow: var(--md-elevation-1);
+      margin-bottom: 1rem;
+    }
+
+    .surface h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--md-sys-color-primary);
+    }
+
+    .surface p {
+      margin: 0 0 0.75rem;
+      line-height: 1.6;
+      color: #cdc6d7;
+    }
+
+    .surface p:last-child {
+      margin-bottom: 0;
+    }
+
+    .math-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+
+    .math-table th,
+    .math-table td {
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 143, 153, 0.2);
+    }
+
+    .math-table th {
+      color: #c8c2cf;
+      font-weight: 500;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .math-table td:first-child {
+      color: var(--md-sys-color-primary);
+      font-family: 'Roboto Mono', 'Consolas', monospace;
+      white-space: nowrap;
+    }
+
+    .math-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    code {
+      font-family: 'Roboto Mono', 'Consolas', monospace;
+      background: rgba(208, 188, 255, 0.1);
+      border-radius: 4px;
+      padding: 0.1em 0.35em;
+      font-size: 0.88em;
+      color: var(--md-sys-color-primary);
+    }
+
+    .steps {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .steps li {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      line-height: 1.6;
+      color: #cdc6d7;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 0.1rem;
+    }
+
+    .install-block {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(148, 143, 153, 0.3);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      font-family: 'Roboto Mono', 'Consolas', monospace;
+      font-size: 0.85rem;
+      color: #c8c2cf;
+      overflow-x: auto;
+      margin-top: 0.75rem;
+      line-height: 1.7;
+    }
+
+    .install-block .comment {
+      color: #6b6578;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <a href="index.html" class="nav-back">← Back to home</a>
+
+    <header class="hero">
+      <h1 class="title">MiniAI Visualizer</h1>
+      <p class="subtitle">A desktop app that visualises token-by-token language model math — with a live softmax table, temperature slider, and a REINFORCE feedback loop.</p>
+    </header>
+
+    <section class="surface">
+      <h2>What it does</h2>
+      <p>MiniAI Visualizer runs a tiny language model step-by-step and shows you every piece of the math as it happens: the hidden context vector <code>h</code>, the raw logits <code>z = W·h + b</code>, temperature scaling <code>z / T</code>, and the final softmax distribution over the vocabulary.</p>
+      <p>After each token is generated you can press <strong>👍</strong> or <strong>👎</strong> to apply a REINFORCE-style weight update — the model's weights are adjusted immediately and auto-saved to disk.</p>
+    </section>
+
+    <section class="surface">
+      <h2>The math, step by step</h2>
+      <table class="math-table" aria-label="Model math stages">
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Formula</th>
+            <th>Shown in UI</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Context</td>
+            <td><code>h′ = tanh(U·h + Vin·E[token] + bh)</code></td>
+            <td>Math log — <code>h</code>, ‖h‖</td>
+          </tr>
+          <tr>
+            <td>Logits</td>
+            <td><code>z = W·h + b</code>, W ∈ ℝ<sup>V×32</sup></td>
+            <td>Table — "logit z"</td>
+          </tr>
+          <tr>
+            <td>Temperature</td>
+            <td><code>z̃ = z / T</code>, T ∈ [0.1, 2.0]</td>
+            <td>Table — "z/T" (live)</td>
+          </tr>
+          <tr>
+            <td>Softmax</td>
+            <td><code>p<sub>i</sub> = e<sup>z̃<sub>i</sub></sup> / Σ e<sup>z̃<sub>j</sub></sup></code></td>
+            <td>Table — "p" + bars</td>
+          </tr>
+          <tr>
+            <td>Sampling</td>
+            <td><code>token ~ Categorical(p)</code></td>
+            <td>Math log — "sampled →"</td>
+          </tr>
+          <tr>
+            <td>RL update</td>
+            <td><code>∂(−J)/∂b<sub>j</sub> = −r·(𝟙[j=t] − p<sub>j</sub>)</code></td>
+            <td>Math log — RL section</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="surface">
+      <h2>How to use it</h2>
+      <ul class="steps">
+        <li><span class="step-num">1</span><span><strong>First launch</strong> — the model quick-pretrains on a built-in corpus (a few seconds), then saves weights locally. Later launches load those weights, including every feedback update you've applied.</span></li>
+        <li><span class="step-num">2</span><span><strong>Temperature slider (0.1 – 2.0)</strong> — drag it and watch the top-10 distribution table update live. Low T sharpens softmax toward the argmax; high T flattens it toward uniform. No token is generated until you press the button.</span></li>
+        <li><span class="step-num">3</span><span><strong>Generate Next Token</strong> — samples one token from <code>softmax(z/T)</code> and appends a full breakdown to the math log.</span></li>
+        <li><span class="step-num">4</span><span><strong>Feedback (RL loop)</strong> — press <strong>👍 +1.0</strong> or <strong>👎 −0.5</strong> after a token. The engine runs one REINFORCE step on the output head, shows the weight delta and probability change, and auto-saves to disk.</span></li>
+      </ul>
+    </section>
+
+    <section class="surface">
+      <h2>Setup (Windows, Python 3.10 – 3.12)</h2>
+      <p>Requires PyTorch ≥ 2.7 built against CUDA 12.8 for RTX 5060 (Blackwell) support. Older wheels do not contain Blackwell kernels. Install in this order:</p>
+      <div class="install-block" role="region" aria-label="Installation commands">
+        <span class="comment">:: 1) create and activate a virtual environment</span><br>
+        python -m venv .venv<br>
+        .venv\Scripts\activate<br><br>
+        <span class="comment">:: 2) CUDA-enabled PyTorch (cu128 wheels bundle the CUDA runtime)</span><br>
+        pip install "torch&gt;=2.7" --index-url https://download.pytorch.org/whl/cu128<br><br>
+        <span class="comment">:: 3) GUI + storage libraries</span><br>
+        pip install customtkinter safetensors numpy<br><br>
+        <span class="comment">:: 4) run the app</span><br>
+        python app.py
+      </div>
+      <p style="margin-top:0.75rem">If CUDA is unavailable the app transparently falls back to CPU — the device in use is shown in the top-left of the window.</p>
+    </section>
+  </div>
+</body>
+</html>
