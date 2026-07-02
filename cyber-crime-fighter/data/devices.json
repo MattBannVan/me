@@ -1,0 +1,26 @@
+[
+  {
+    "id": "aurora-x16pro", "brand": "Aurora", "model": "X16 Pro Max", "year": 2025,
+    "os": "iOS-like", "osName": "AuroraOS", "osVersions": ["18.1", "18.2", "18.3"],
+    "form": "dynamic-island", "size": "large", "camera": "square-triple",
+    "nav": "gesture", "launcher": "AuroraOS", "clockStyle": "stacked-serif",
+    "bodyColors": ["#3f3f46", "#e4e4e7", "#134e4a", "#7c2d12"],
+    "tags": ["flagship", "premium", "newest"]
+  },
+  {
+    "id": "helix-z-fold", "brand": "Helix", "model": "Nova Z Fold", "year": 2025,
+    "os": "Android", "osName": "Android 15", "osVersions": ["14", "15"],
+    "form": "punch-hole-center", "size": "large", "camera": "pill-vertical",
+    "nav": "gesture", "launcher": "OneShell", "clockStyle": "big-thin",
+    "bodyColors": ["#0c0a09", "#d6d3d1", "#1e3a8a"],
+    "tags": ["foldable", "flagship"]
+  },
+  {
+    "id": "quill-p9pro", "brand": "Quill", "model": "Pixela 9 Pro", "year": 2024,
+    "os": "Android", "osName": "Android 15", "osVersions": ["14", "15"],
+    "form": "punch-hole-center", "size": "standard", "camera": "horizontal-bar",
+    "nav": "gesture", "launcher": "PureLauncher", "clockStyle": "geometric",
+    "bodyColors": ["#fef3c7", "#111827", "#831843"],
+    "tags": ["stock-android", "photography", "flagship"]
+  }
+]
