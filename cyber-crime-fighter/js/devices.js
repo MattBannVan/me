@@ -180,18 +180,38 @@ function getWallpaper(id){ return WALLPAPERS.find(w => w.id === id); }
 function getApp(id){ return APPS.find(a => a.id === id); }
 function getDevice(id){ return DEVICES.find(d => d.id === id); }
 
+/* Validate an externally-supplied device before trusting it. Device fields
+   flow into innerHTML and into case generation, so reject anything with a bad
+   shape (would crash rand(device.bodyColors) etc.) or unsafe characters (would
+   allow HTML/JS injection). */
+function isSafeStr(s){ return typeof s === "string" && s.length > 0 && !/[<>]/.test(s); }
+function isValidExternalDevice(d){
+  if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+  const reqStr = ["id","brand","model","os","osName","launcher","clockStyle","size"];
+  if (!reqStr.every(k => isSafeStr(d[k]))) return false;
+  if (!Object.prototype.hasOwnProperty.call(FORM_LABELS, d.form)) return false;
+  if (!Object.prototype.hasOwnProperty.call(CAMERA_LABELS, d.camera)) return false;
+  if (d.nav !== "gesture" && d.nav !== "buttons") return false;
+  if (!Array.isArray(d.osVersions) || !d.osVersions.length || !d.osVersions.every(isSafeStr)) return false;
+  if (!Array.isArray(d.bodyColors) || !d.bodyColors.length ||
+      !d.bodyColors.every(c => typeof c === "string" && /^#[0-9a-fA-F]{3,8}$/.test(c))) return false;
+  if ("year" in d && typeof d.year !== "number") return false;
+  if ("tags" in d && (!Array.isArray(d.tags) || !d.tags.every(isSafeStr))) return false;
+  return true;
+}
+
 /* Optional runtime extension: if a data/devices.json exists it is merged in.
    This is what lets you "load relevant information on real world devices" and
-   grow the challenge pool without touching code. */
+   grow the challenge pool without touching code. Entries are validated first. */
 async function loadExternalDevices(){
   try {
     const res = await fetch("data/devices.json", { cache: "no-store" });
     if (!res.ok) return;
     const extra = await res.json();
-    if (Array.isArray(extra)) {
-      for (const d of extra) {
-        if (d && d.id && !DEVICES.some(x => x.id === d.id)) DEVICES.push(d);
-      }
+    if (!Array.isArray(extra)) return;
+    for (const d of extra) {
+      if (!isValidExternalDevice(d)) { console.warn("Skipping invalid external device", d && d.id); continue; }
+      if (!DEVICES.some(x => x.id === d.id)) DEVICES.push(d);
     }
   } catch (_) { /* no external file — fine */ }
 }

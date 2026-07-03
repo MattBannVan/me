@@ -28,6 +28,8 @@
   function fadeIn(node){ node.classList.add("fade-in"); }
 
   /* ---------- typewriter cinematic ---------- */
+  let typeTimer = null;
+  function clearType(){ if (typeTimer){ clearInterval(typeTimer); typeTimer = null; } }
   function cinematic(panels, onDone){
     let i = 0;
     function show(){
@@ -50,20 +52,20 @@
           </div>
         </div>`);
       typewrite($("#cineText"), p.text, ()=>{});
-      $("#cineNext").onclick = () => { SFX.click(); i++; (i < panels.length) ? show() : onDone(); };
-      $("#cineSkip").onclick = () => { SFX.click(); onDone(); };
+      $("#cineNext").onclick = () => { clearType(); SFX.click(); i++; (i < panels.length) ? show() : onDone(); };
+      $("#cineSkip").onclick = () => { clearType(); SFX.click(); onDone(); };
     }
     show();
   }
   function typewrite(node, text, done){
+    clearType();
     node.textContent = ""; let i = 0;
-    const id = setInterval(() => {
+    typeTimer = setInterval(() => {
       node.textContent += text[i] || "";
       if (i % 2 === 0) SFX.type();
       i++;
-      if (i >= text.length){ clearInterval(id); done && done(); }
+      if (i >= text.length){ clearType(); done && done(); }
     }, 16);
-    node.dataset.tid = id;
   }
 
   /* ---------- HUD ---------- */

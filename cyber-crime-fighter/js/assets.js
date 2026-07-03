@@ -159,7 +159,12 @@ ART.carrierGlyph = function(carrier){
 };
 
 /* ---- Wallpapers ------------------------------------------------------- */
+const _wpCache = {};
 ART.wallpaper = function(wp, w=300, h=620){
+  // Cache per wallpaper+size: random-placed dots would otherwise re-roll on
+  // every PHONE.render(), making a fixed wallpaper visibly flicker.
+  const cacheKey = `${wp.id}_${w}x${h}`;
+  if (_wpCache[cacheKey]) return _wpCache[cacheKey];
   const id = "wp_" + wp.id;
   let overlay = "";
   if (wp.style === "dots"){
@@ -175,7 +180,9 @@ ART.wallpaper = function(wp, w=300, h=620){
     else if (wp.id==="car") overlay = `<g opacity="0.95"><path d="M${w*0.15} ${h*0.55} q${w*0.1}-40 ${w*0.35}-40 q${w*0.25} 0 ${w*0.35} 40 l0 30 h-${w*0.7}z" fill="#ef4444"/><circle cx="${w*0.3}" cy="${h*0.62}" r="18" fill="#111827"/><circle cx="${w*0.7}" cy="${h*0.62}" r="18" fill="#111827"/></g>`;
     else overlay = `<g opacity="0.95"><ellipse cx="${w*0.5}" cy="${h*0.55}" rx="60" ry="50" fill="#a16207"/><circle cx="${w*0.42}" cy="${h*0.48}" r="6" fill="#111"/><circle cx="${w*0.58}" cy="${h*0.48}" r="6" fill="#111"/><ellipse cx="${w*0.5}" cy="${h*0.6}" rx="12" ry="8" fill="#1c1917"/></g>`;
   }
-  return svg(w, h, `<defs>${grad(id, wp.stops, 0,0, 0.4,1)}</defs><rect width="${w}" height="${h}" fill="url(#${id})"/>${overlay}`, `preserveAspectRatio="xMidYMid slice"`);
+  const out = svg(w, h, `<defs>${grad(id, wp.stops, 0,0, 0.4,1)}</defs><rect width="${w}" height="${h}" fill="url(#${id})"/>${overlay}`, `preserveAspectRatio="xMidYMid slice"`);
+  _wpCache[cacheKey] = out;
+  return out;
 };
 
 /* ---- Evidence items --------------------------------------------------- */
