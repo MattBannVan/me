@@ -81,9 +81,93 @@ export const USER_ACTION_SCRIPT = [
   },
 ];
 
-/** Plays every beat in order. Resolves when the user should get control. */
-export async function runUserActionScript(actors) {
-  for (const beat of USER_ACTION_SCRIPT) {
+/**
+ * VR (headset) variant of the same sequence. Inside a headset the script
+ * cannot rotate the user's head or move their real hands — forcing camera
+ * motion is a comfort violation and tracking overrides it anyway. So under
+ * limited control the beats become GUIDED: the HUD prompts the action and
+ * `waitForLook` watches the actual headset pitch until the user performs
+ * it (with a timeout so the sequence never stalls). Hands are the tracked
+ * controllers wearing the suit gloves; the boot tap and greetings still
+ * animate in-world.
+ *
+ * Extra VR actors: waitForLook(zone, timeoutMs) with zone
+ * 'down' | 'down-steep' | 'forward'.
+ */
+export const USER_ACTION_SCRIPT_XR = [
+  {
+    name: 'settle',
+    run: async (a) => {
+      a.hud('MOTOR CONTROL: RESTRICTED — SUIT SYNC IN PROGRESS');
+      await a.wait(2200);
+    },
+  },
+  {
+    name: 'look-down-at-hands',
+    run: async (a) => {
+      a.hud('LOOK DOWN — CHECK YOUR GLOVES');
+      await a.waitForLook('down', 9000);
+      await a.wait(400);
+    },
+  },
+  {
+    name: 'move-hands-around',
+    run: async (a) => {
+      a.hud('MOVE YOUR HANDS — FLEX EACH GLOVE');
+      await a.wait(3600);
+    },
+  },
+  {
+    name: 'look-down-at-boots',
+    run: async (a) => {
+      a.hud('CHECK YOUR BOOTS');
+      await a.waitForLook('down-steep', 9000);
+      await a.wait(400);
+    },
+  },
+  {
+    name: 'tap-left-boot',
+    run: async (a) => {
+      await a.tapLeftBoot(1100);
+      await a.wait(500);
+    },
+  },
+  {
+    name: 'look-back-up',
+    run: async (a) => {
+      a.hud('EYES FORWARD');
+      await a.waitForLook('forward', 9000);
+      await a.wait(300);
+    },
+  },
+  {
+    name: 'greet-specialists',
+    run: async (a) => {
+      a.hud('GREET THE SPECIALISTS');
+      a.specialistMurmur('left');
+      await a.nod(900);
+      a.specialistMurmur('right');
+      await a.specialistsNod(1100);
+      await a.wait(600);
+    },
+  },
+  {
+    name: 'release-control',
+    run: async (a) => {
+      a.hud('MOTOR CONTROL: RESTORED — PROCEED TO CAPSULE PORT');
+    },
+  },
+];
+
+/**
+ * Plays every beat in order. Resolves when the user should get control.
+ * mode: 'screen' (flat 2D fallback) | 'xr' (in-headset, gaze-guided).
+ */
+export async function runUserActionScript(actors, mode = 'screen') {
+  const beats = mode === 'xr' ? USER_ACTION_SCRIPT_XR : USER_ACTION_SCRIPT;
+  for (const beat of beats) {
+    console.debug(`[script:${mode}] beat: ${beat.name}`);
     await beat.run(actors);
   }
+  console.debug(`[script:${mode}] complete — releasing control`);
 }

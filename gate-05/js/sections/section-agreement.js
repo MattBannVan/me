@@ -81,8 +81,12 @@ export function mount(root, ctx) {
   root.querySelector('#decline-btn').addEventListener('click', onDecline);
 }
 
-function onAccept() {
+async function onAccept() {
   ctxRef.audio.play('sfx.uiConfirm');
+  // Enter the immersive VR session here — requestSession must be called
+  // from a user gesture. From this point the experience runs in-headset;
+  // if WebXR is unavailable the flat 2D fallback continues instead.
+  if (ctxRef.config.vr.enabled) await ctxRef.stage.tryEnter();
   ctxRef.next();
 }
 

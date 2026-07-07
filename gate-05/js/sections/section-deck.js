@@ -6,11 +6,19 @@
  * Two specialists in black uniforms flank it, their body language urging
  * the user to enter.
  *
- * Renderable two ways (CONFIG.deckMode):
- *   'open-world' — after the scripted intro the user receives control
- *                  (signalled by a brief haptic vibration): free look +
- *                  movement, but boarding only completes at the port.
- *   'movie'      — fully scripted: the camera walks itself into the port.
+ * Rendering modes:
+ *  - IMMERSIVE VR (ctx.stage.active): renders through the shared XR stage
+ *    into the headset. The intro script runs gaze-guided (see
+ *    user-action-script.js), gloves ride the tracked controllers, and
+ *    locomotion is left-stick smooth move + right-stick snap turn.
+ *  - FLAT 2D fallback: own renderer/canvas, scripted camera intro, then
+ *    WASD/drag controls.
+ *
+ * Independently, CONFIG.deckMode selects:
+ *  - 'open-world' : after the scripted intro the user receives control
+ *                   (signalled by a brief haptic vibration) and must
+ *                   eventually enter the capsule port.
+ *  - 'movie'      : fully scripted — the rig walks itself into the port.
  *
  * Control of the user's body during the intro lives in
  * js/script/user-action-script.js (SCRIPT LAYER).
@@ -36,8 +44,11 @@ let S = null; // section state
 export function mount(root, ctx) {
   S = {
     ctx, root,
+    xr: ctx.stage.active,
+    stage: ctx.stage,
     disposed: false,
     tweens: new Set(),
+    gazeWaiters: new Set(),
     controlGranted: false,
     boarding: false,
     keys: new Set(),
@@ -45,28 +56,40 @@ export function mount(root, ctx) {
     murmurTimer: null,
   };
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(root.clientWidth, root.clientHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  root.appendChild(renderer.domElement);
-
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x04060a, 8, 22);
-
   buildDeckInterior(scene);
   S.port = buildCapsulePort(scene);
   S.specialists = [
     buildSpecialist(scene, new THREE.Vector3(-1.35, 0, -6.4), 0.45),
     buildSpecialist(scene, new THREE.Vector3(1.35, 0, -6.4), -0.45),
   ];
-  S.player = buildPlayerRig(scene);
-
-  S.renderer = renderer;
   S.scene = scene;
   S.clock = new THREE.Clock();
 
-  // HUD + visor frame overlays
+  if (S.xr) {
+    // Shared XR renderer — the headset shows the scene; the flat screen
+    // mirrors it. Just leave a note in the DOM.
+    S.renderer = ctx.stage.renderer;
+    S.player = buildPlayerRigXR(scene, ctx.stage);
+    root.innerHTML = `
+      <div class="loading-stack">
+        <h1 class="loading-title">Onboarding Deck</h1>
+        <p class="loading-phase">Experience running in headset …</p>
+      </div>`;
+    return;
+  }
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(root.clientWidth, root.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  root.appendChild(renderer.domElement);
+  S.renderer = renderer;
+  S.player = buildPlayerRig(scene);
+
+  // HUD + visor frame overlays (2D only — in VR the stage HUD is used and
+  // the visor is your actual headset).
   root.insertAdjacentHTML('beforeend', `
     <div class="visor-frame"></div>
     <div class="deck-hud"><span class="hud-line" id="deck-hud-line"></span></div>
@@ -84,10 +107,20 @@ export function mount(root, ctx) {
 
 export async function start(ctx) {
   startAmbientAudio(ctx);
-  animate();
+
+  if (S.xr) {
+    ctx.stage.setScene(S.scene, (dt, t) => frameUpdate(dt, t));
+  } else {
+    S.renderer.setAnimationLoop(() => {
+      if (!S || S.disposed) return;
+      const dt = Math.min(S.clock.getDelta(), 0.05);
+      frameUpdate(dt, S.clock.elapsedTime);
+      S.renderer.render(S.scene, S.player.camera);
+    });
+  }
 
   const actors = makeActors(ctx);
-  await runUserActionScript(actors);
+  await runUserActionScript(actors, S.xr ? 'xr' : 'screen');
 
   if (ctx.config.deckMode === 'movie') {
     await playMovieEnding(ctx);
@@ -100,11 +133,15 @@ export function teardown() {
   if (!S) return;
   S.disposed = true;
   clearTimeout(S.murmurTimer);
-  removeEventListener('resize', S.onResize);
-  removeInputListeners();
   S.ctx.audio.stopAll(0.8);
-  S.renderer.setAnimationLoop(null);
-  S.renderer.dispose();
+  if (S.xr) {
+    S.stage.setScene(null, null);
+  } else {
+    removeEventListener('resize', S.onResize);
+    removeInputListeners();
+    S.renderer.setAnimationLoop(null);
+    S.renderer.dispose();
+  }
   S = null;
 }
 
@@ -168,7 +205,7 @@ function buildDeckInterior(scene) {
   ceil.position.set(0, height, centerZ);
   scene.add(ceil);
 
-  // Ceiling light strips + warm-white downlights
+  // Ceiling light strips + cool downlights
   const stripMat = new THREE.MeshBasicMaterial({ color: 0xdff2ff });
   for (let z = backZ + 1.5; z < backZ + depth; z += 2.4) {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.04, 0.12), stripMat);
@@ -193,7 +230,7 @@ function buildDeckInterior(scene) {
     scene.add(valve);
   }
 
-  // SpaceX-style wordmark panel on the side wall
+  // Wordmark panel on the side wall
   const brand = new THREE.Mesh(
     new THREE.PlaneGeometry(3.2, 0.5),
     new THREE.MeshBasicMaterial({ map: textTexture('ONBOARDING DECK 05', '#9fb4d4'), transparent: true })
@@ -327,7 +364,7 @@ function buildSpecialist(scene, position, faceYaw) {
     nodOffset: 0,
     update(t) {
       // Subtle sway + a repeating open-palm sweep toward the port:
-      // arm raised sideways-and-back, "after you" body language.
+      // arm raised toward center, angled back — "after you".
       g.position.y = Math.sin(t * 0.9 + position.x) * 0.012;
       const sweep = (Math.sin(t * 1.1) + 1) / 2;               // 0..1
       gestureArm.rotation.z = inner * (0.55 + sweep * 0.3);    // raised toward center
@@ -343,6 +380,39 @@ function buildSpecialist(scene, position, faceYaw) {
 /* Player rig — suited user: camera, gloved hands, boots                  */
 /* ====================================================================== */
 
+const suitMat = () => new THREE.MeshStandardMaterial({ color: 0xe8edf4, roughness: 0.5 });
+const sealMat = () => new THREE.MeshStandardMaterial({ color: 0x30455f, roughness: 0.4, metalness: 0.5 });
+
+function mkHand(side, suit, seal) {
+  const wrist = new THREE.Group();
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.03, 0.11), suit);
+  const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.082, 0.026, 0.06), suit);
+  fingers.position.set(0, 0, -0.08);
+  fingers.rotation.x = -0.25;
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.024, 0.055), suit);
+  thumb.position.set(side * 0.055, 0, -0.02);
+  thumb.rotation.y = side * 0.5;
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.062, 0.09, 14), seal);
+  cuff.rotation.x = Math.PI / 2;
+  cuff.position.z = 0.09;
+  wrist.add(palm, fingers, thumb, cuff);
+  return wrist;
+}
+
+function mkBoot(side, suit, seal) {
+  const boot = new THREE.Group();
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.3), suit);
+  foot.position.y = 0.065;
+  const soleMat = new THREE.MeshStandardMaterial({ color: 0x222a35, roughness: 0.8 });
+  const sole = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.32), soleMat);
+  sole.position.y = 0.015;
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.16, 14), seal);
+  cuff.position.set(0, 0.17, 0.06);
+  boot.add(foot, sole, cuff);
+  boot.position.set(side * 0.15, 0, -0.16);
+  return boot;
+}
+
 function buildPlayerRig(scene) {
   const rig = new THREE.Group();          // body position + yaw
   rig.position.set(0, 0, 2.6);
@@ -353,45 +423,18 @@ function buildPlayerRig(scene) {
   rig.add(pitchObj);
   scene.add(rig);
 
-  const suit = new THREE.MeshStandardMaterial({ color: 0xe8edf4, roughness: 0.5 });
-  const seal = new THREE.MeshStandardMaterial({ color: 0x30455f, roughness: 0.4, metalness: 0.5 });
+  const suit = suitMat();
+  const seal = sealMat();
 
-  const mkHand = (side) => {
-    const wrist = new THREE.Group();
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.03, 0.11), suit);
-    const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.082, 0.026, 0.06), suit);
-    fingers.position.set(0, 0, -0.08);
-    fingers.rotation.x = -0.25;
-    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.024, 0.055), suit);
-    thumb.position.set(side * 0.055, 0, -0.02);
-    thumb.rotation.y = side * 0.5;
-    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.062, 0.09, 14), seal);
-    cuff.rotation.x = Math.PI / 2;
-    cuff.position.z = 0.09;
-    wrist.add(palm, fingers, thumb, cuff);
-    wrist.position.set(side * 0.21, -0.78, -0.48);   // lowered / out of view
-    wrist.rotation.x = -0.6;
-    return wrist;
-  };
-  const handL = mkHand(-1);
-  const handR = mkHand(1);
+  const handL = mkHand(-1, suit, seal);
+  const handR = mkHand(1, suit, seal);
+  handL.position.set(-0.21, -0.78, -0.48);   // lowered / out of view
+  handR.position.set(0.21, -0.78, -0.48);
+  handL.rotation.x = handR.rotation.x = -0.6;
   pitchObj.add(handL, handR);
 
-  const mkBoot = (side) => {
-    const boot = new THREE.Group();
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.3), suit);
-    foot.position.y = 0.065;
-    const soleMat = new THREE.MeshStandardMaterial({ color: 0x222a35, roughness: 0.8 });
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.32), soleMat);
-    sole.position.y = 0.015;
-    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.16, 14), seal);
-    cuff.position.set(0, 0.17, 0.06);
-    boot.add(foot, sole, cuff);
-    boot.position.set(side * 0.15, 0, -0.16);
-    return boot;
-  };
-  const bootL = mkBoot(-1);
-  const bootR = mkBoot(1);
+  const bootL = mkBoot(-1, suit, seal);
+  const bootR = mkBoot(1, suit, seal);
   rig.add(bootL, bootR);
 
   return {
@@ -399,6 +442,40 @@ function buildPlayerRig(scene) {
     hands: { left: handL, right: handR, raised: 0 },
     boots: { left: bootL, right: bootR },
     handsHome: { y: -0.78, raisedY: -0.26 },
+  };
+}
+
+/**
+ * VR player rig: the shared stage rig is placed on the deck; suit gloves
+ * ride the tracked controller grips (index 0/1 handedness varies — the
+ * glove shape is symmetric enough at this scale) and boots sit at the
+ * rig's floor.
+ */
+function buildPlayerRigXR(scene, stage) {
+  stage.rig.position.set(0, 0, 2.6);
+  stage.rig.rotation.set(0, 0, 0);        // facing -z = the capsule port
+
+  const suit = suitMat();
+  const seal = sealMat();
+
+  const gloves = [];
+  stage.controllerGrips.forEach((grip, i) => {
+    const glove = mkHand(i === 0 ? -1 : 1, suit, seal);
+    glove.rotation.x = -Math.PI / 3;       // align palm with grip pose
+    grip.add(glove);
+    gloves.push(glove);
+  });
+
+  const bootL = mkBoot(-1, suit, seal);
+  const bootR = mkBoot(1, suit, seal);
+  stage.rig.add(bootL, bootR);
+
+  return {
+    rig: stage.rig,
+    camera: stage.camera,
+    hands: { left: gloves[0], right: gloves[1], raised: 1 },
+    boots: { left: bootL, right: bootR },
+    handsHome: { y: 0, raisedY: 0 },
   };
 }
 
@@ -422,14 +499,38 @@ function stepTweens(now) {
   }
 }
 
+function stepGazeWaiters() {
+  if (!S.gazeWaiters.size) return;
+  const pitch = S.xr ? S.stage.lookPitch() : S.look.pitch;
+  const now = performance.now();
+  for (const w of [...S.gazeWaiters]) {
+    if (w.check(pitch) || now > w.deadline) {
+      S.gazeWaiters.delete(w);
+      w.resolve();
+    }
+  }
+}
+
+const GAZE_ZONES = {
+  'down':       (pitch) => pitch < -0.5,
+  'down-steep': (pitch) => pitch < -0.85,
+  'forward':    (pitch) => pitch > -0.2,
+};
+
 function makeActors(ctx) {
   const p = S.player;
   return {
     wait: (ms) => new Promise((r) => setTimeout(r, ms)),
     hud: (text) => {
+      if (S.xr) { S.stage.hud(text); return; }
       S.hudEl.textContent = text || '';
       S.hudEl.classList.toggle('is-visible', !!text);
     },
+    /** VR: resolve when the headset actually looks at the zone (or timeout). */
+    waitForLook: (zone, timeoutMs = 9000) =>
+      new Promise((resolve) => {
+        S.gazeWaiters.add({ check: GAZE_ZONES[zone], deadline: performance.now() + timeoutMs, resolve });
+      }),
     pitchTo: (rad, ms) => {
       const from = S.look.pitch;
       return tween(ms, (e) => { S.look.pitch = from + (rad - from) * e; });
@@ -467,10 +568,13 @@ function makeActors(ctx) {
       ctx.audio.play('sfx.bootTap', { position: wp });
       await tween(ms * 0.25, (e) => { boot.position.y = 0.14 * (1 - e); boot.rotation.x = -0.3 * (1 - e); });
     },
-    nod: (ms) =>
-      tween(ms, (_, tRaw) => {
-        S.nodPitch = Math.sin(tRaw * Math.PI) * -0.22;
-      }).then(() => { S.nodPitch = 0; }),
+    // In VR we never rotate the user's head — the greeting nod is theirs
+    // to perform, so the beat just leaves them a moment for it.
+    nod: (ms) => S.xr
+      ? new Promise((r) => setTimeout(r, ms))
+      : tween(ms, (_, tRaw) => {
+          S.nodPitch = Math.sin(tRaw * Math.PI) * -0.22;
+        }).then(() => { S.nodPitch = 0; }),
     specialistsNod: (ms) =>
       tween(ms, (_, tRaw) => {
         const v = Math.sin(tRaw * Math.PI) * 0.3;
@@ -511,17 +615,25 @@ function startAmbientAudio(ctx) {
 function grantControl(ctx) {
   S.controlGranted = true;
   ctx.audio.play('sfx.hapticCue');
-  pulseHaptics(ctx.config.deck.hapticPatternMs);
-  addInputListeners();
+  if (S.xr) {
+    // The brief vibration that signals control is granted — through the
+    // actual VR controllers.
+    S.stage.pulseHaptics(0.7, 250);
+  } else {
+    pulseHaptics(ctx.config.deck.hapticPatternMs);
+    addInputListeners();
+  }
   setTimeout(() => {
-    if (S && !S.boarding) S.hudEl?.classList.remove('is-visible');
+    if (!S || S.boarding) return;
+    if (S.xr) S.stage.hud('');
+    else S.hudEl?.classList.remove('is-visible');
   }, 5000);
 }
 
 function pulseHaptics(pattern) {
   // Phone/handset vibration where supported…
   navigator.vibrate?.(pattern);
-  // …and any connected gamepad actuators (e.g. VR-adjacent controllers).
+  // …and any connected gamepad actuators.
   for (const pad of navigator.getGamepads?.() ?? []) {
     pad?.vibrationActuator?.playEffect?.('dual-rumble', {
       duration: pattern.reduce((a, b) => a + b, 0),
@@ -564,8 +676,40 @@ function removeInputListeners() {
   el.removeEventListener('pointermove', S.onPointerMove);
 }
 
+const clampToDeck = (rig) => {
+  rig.position.x = Math.max(-DECK.boundsX, Math.min(DECK.boundsX, rig.position.x));
+  rig.position.z = Math.max(DECK.boundsZ.min, Math.min(DECK.boundsZ.max, rig.position.z));
+};
+
 function stepMovement(dt, ctx) {
   if (!S.controlGranted || S.boarding) return;
+
+  if (S.xr) {
+    // Left stick: smooth locomotion relative to where the headset faces.
+    const axes = S.stage.getMoveAxes();
+    if (Math.hypot(axes.x, axes.y) > 0.15) {
+      const fwd = S.stage.headWorldDirection();
+      fwd.y = 0; fwd.normalize();
+      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).negate();
+      const move = new THREE.Vector3()
+        .addScaledVector(fwd, -axes.y)
+        .addScaledVector(right, -axes.x)
+        .multiplyScalar(ctx.config.deck.moveSpeed * dt);
+      S.player.rig.position.add(move);
+      clampToDeck(S.player.rig);
+    }
+    // Right stick: snap turn.
+    const snap = S.stage.consumeSnapTurn();
+    if (snap) S.player.rig.rotation.y -= snap * THREE.MathUtils.degToRad(ctx.config.vr.snapTurnDeg);
+
+    // Boarding trigger uses the actual head position — the user may also
+    // simply walk there physically.
+    const head = S.stage.headWorldPosition();
+    const flatDist = Math.hypot(head.x - DECK.portPos.x, head.z - DECK.portPos.z);
+    if (flatDist < ctx.config.deck.portEnterRadius + 0.35) beginBoarding(ctx);
+    return;
+  }
+
   const speed = ctx.config.deck.moveSpeed;
   const dir = new THREE.Vector3(
     (S.keys.has('KeyD') || S.keys.has('ArrowRight') ? 1 : 0) -
@@ -577,8 +721,9 @@ function stepMovement(dt, ctx) {
   if (dir.lengthSq() > 0) {
     dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), S.look.yaw).multiplyScalar(speed * dt);
     const rig = S.player.rig;
-    rig.position.x = Math.max(-DECK.boundsX, Math.min(DECK.boundsX, rig.position.x + dir.x));
-    rig.position.z = Math.max(DECK.boundsZ.min, Math.min(DECK.boundsZ.max, rig.position.z + dir.z));
+    rig.position.x += dir.x;
+    rig.position.z += dir.z;
+    clampToDeck(rig);
 
     // Boarding trigger: the user has reached the capsule entry port.
     const flatDist = Math.hypot(rig.position.x - DECK.portPos.x, rig.position.z - DECK.portPos.z);
@@ -589,32 +734,58 @@ function stepMovement(dt, ctx) {
 async function beginBoarding(ctx) {
   if (S.boarding) return;
   S.boarding = true;
-  S.hudEl.textContent = 'ENTERING DRAGON CREW CAPSULE';
-  S.hudEl.classList.add('is-visible');
+  if (S.xr) S.stage.hud('ENTERING DRAGON CREW CAPSULE');
+  else {
+    S.hudEl.textContent = 'ENTERING DRAGON CREW CAPSULE';
+    S.hudEl.classList.add('is-visible');
+  }
   ctx.audio.play('sfx.portEnter');
   ctx.audio.setLayerGain('background', 0.15, 2.2);
 
   // Glide the last half-metre into the white light.
   const rig = S.player.rig;
   const from = rig.position.clone();
-  const to = new THREE.Vector3(DECK.portPos.x, 0, DECK.portPos.z + 0.35);
+  let to;
+  if (S.xr) {
+    // Account for where the head actually is inside the play space so the
+    // HEAD (not the rig origin) ends up at the port.
+    const head = S.stage.headWorldPosition();
+    to = new THREE.Vector3(
+      rig.position.x + (DECK.portPos.x - head.x),
+      0,
+      rig.position.z + (DECK.portPos.z + 0.35 - head.z),
+    );
+  } else {
+    to = new THREE.Vector3(DECK.portPos.x, 0, DECK.portPos.z + 0.35);
+  }
   await tween(2400, (e) => {
     rig.position.lerpVectors(from, to, e);
-    S.look.pitch += (0 - S.look.pitch) * 0.04;
-    S.look.yaw += (0 - S.look.yaw) * 0.04;
+    if (!S.xr) {
+      S.look.pitch += (0 - S.look.pitch) * 0.04;
+      S.look.yaw += (0 - S.look.yaw) * 0.04;
+    }
   });
 
-  // White-out through the shared fader, then the end card.
-  const fader = document.getElementById('fader');
-  fader.classList.add('is-white', 'is-active');
-  await new Promise((r) => setTimeout(r, ctx.config.fadeMs + 400));
-  showEndCard(ctx, fader);
+  // White-out, then the end card.
+  window.__gate05BoardingComplete = true;
+  if (S.xr) {
+    await S.stage.fade(1, ctx.config.fadeMs + 400, 0xffffff);
+    await new Promise((r) => setTimeout(r, 600));
+    await S.stage.endSession();               // back to the flat page…
+    S.stage.renderer.domElement.style.display = 'none';
+    showEndCard(ctx, null);
+  } else {
+    const fader = document.getElementById('fader');
+    fader.classList.add('is-white', 'is-active');
+    await new Promise((r) => setTimeout(r, ctx.config.fadeMs + 400));
+    showEndCard(ctx, fader);
+  }
 }
 
 function showEndCard(ctx, fader) {
   S.root.querySelector('.deck-hud')?.remove();
   S.root.querySelector('.visor-frame')?.remove();
-  S.renderer.domElement.style.display = 'none';
+  if (!S.xr) S.renderer.domElement.style.display = 'none';
   S.root.insertAdjacentHTML('beforeend', `
     <div style="position:absolute;inset:0;display:grid;place-items:center;background:var(--acl-bg);">
       <div style="text-align:center;max-width:32rem;padding:1rem;">
@@ -627,11 +798,13 @@ function showEndCard(ctx, fader) {
       </div>
     </div>
   `);
-  fader.classList.remove('is-active');
-  setTimeout(() => fader.classList.remove('is-white'), ctx.config.fadeMs);
+  if (fader) {
+    fader.classList.remove('is-active');
+    setTimeout(() => fader.classList.remove('is-white'), ctx.config.fadeMs);
+  }
 }
 
-/** 'movie' mode ending: the camera walks itself into the port. */
+/** 'movie' mode ending: the rig walks itself into the port. */
 async function playMovieEnding(ctx) {
   const rig = S.player.rig;
   const from = rig.position.clone();
@@ -641,32 +814,29 @@ async function playMovieEnding(ctx) {
 }
 
 /* ====================================================================== */
-/* Frame loop                                                             */
+/* Per-frame update (shared by the XR stage loop and the 2D loop)         */
 /* ====================================================================== */
 
-function animate() {
-  S.renderer.setAnimationLoop(() => {
-    if (!S || S.disposed) return;
-    const dt = Math.min(S.clock.getDelta(), 0.05);
-    const t = S.clock.elapsedTime;
-    const now = performance.now();
+function frameUpdate(dt, t) {
+  if (!S || S.disposed) return;
+  const now = performance.now();
 
-    stepTweens(now);
-    stepMovement(dt, S.ctx);
+  stepTweens(now);
+  stepGazeWaiters();
+  stepMovement(dt, S.ctx);
 
+  if (!S.xr) {
     S.player.rig.rotation.y = S.look.yaw;
     S.player.pitchObj.rotation.x = S.look.pitch + (S.nodPitch || 0);
+  }
 
-    S.port.userData.update(t);
-    for (const sp of S.specialists) sp.update(t);
+  S.port.userData.update(t);
+  for (const sp of S.specialists) sp.update(t);
 
-    // Feed the AUDIO LAYER the listener pose for spatialized sound.
-    const camPos = new THREE.Vector3();
-    const camDir = new THREE.Vector3();
-    S.player.camera.getWorldPosition(camPos);
-    S.player.camera.getWorldDirection(camDir);
-    S.ctx.audio.setListenerPose(camPos, camDir);
-
-    S.renderer.render(S.scene, S.player.camera);
-  });
+  // Feed the AUDIO LAYER the listener pose for spatialized sound.
+  const camPos = new THREE.Vector3();
+  const camDir = new THREE.Vector3();
+  S.player.camera.getWorldPosition(camPos);
+  S.player.camera.getWorldDirection(camDir);
+  S.ctx.audio.setListenerPose(camPos, camDir);
 }

@@ -27,6 +27,18 @@ export const CONFIG = {
   /** Section execution order. Each id maps to js/sections/section-<id>.js */
   sequence: ['gate', 'agreement', 'loading', 'deck'],
 
+  /**
+   * VR (WebXR) — once the user accepts the terms, the rest of the
+   * experience runs as an immersive-vr session (Meta Quest etc.; the
+   * page must be served over HTTPS). If no headset/WebXR is available
+   * the flat 2D fallback plays instead.
+   */
+  vr: {
+    enabled: true,
+    referenceSpace: 'local-floor',
+    snapTurnDeg: 30,
+  },
+
   /** Fade transition length between sections (must match CSS .fader). */
   fadeMs: 900,
 

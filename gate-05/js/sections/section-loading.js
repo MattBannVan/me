@@ -1,23 +1,32 @@
 /**
  * SECTION 3 — Loading / Flight Setup In Progress.
  *
- * Dedicated slot (#flight-setup-graphic) for an animated graphic that
- * represents the flight setup. A built-in animated SVG (orbiting craft
- * over a spinning diagnostic ring) plays by default; provide
- * config.loading.graphicUrl — or replace the slot's contents — to swap
- * in a custom animation without touching the rest of the section.
+ * Two renderings of the same sequence, chosen by whether the immersive
+ * VR session is active (ctx.stage.active):
+ *
+ *  - VR: a 3D "flight setup" hologram floats in front of the user —
+ *    spinning diagnostic ring, orbiting capsule, progress arc and phase
+ *    text — rendered through the shared XR stage.
+ *  - 2D fallback: the DOM layout with the #flight-setup-graphic slot.
+ *    A built-in animated SVG plays by default; provide
+ *    config.loading.graphicUrl — or replace the slot's contents — to
+ *    swap it out without touching the rest of the section.
  *
  * When the setup phases complete, the sequencer fades (to white) into
  * the SpaceX onboarding deck.
  */
 
+import * as THREE from '../vendor/three.module.min.js';
+
 export const id = 'loading';
 
 let ctxRef = null;
 let timers = [];
+let vr = null;   // VR-mode state { scene, ring, capsuleOrbit, arc, phaseTex, … }
 
 export function mount(root, ctx) {
   ctxRef = ctx;
+  if (ctx.stage.active) { mountVR(root, ctx); return; }
 
   root.innerHTML = `
     <div class="loading-stack">
@@ -44,17 +53,21 @@ export function mount(root, ctx) {
 
 export function start(ctx) {
   const { phases, durationMs } = ctx.config.loading;
-  const phaseEl = document.getElementById('loading-phase');
-  const fill = document.getElementById('bar-fill');
-  const bar = document.getElementById('loading-bar');
   const step = durationMs / phases.length;
 
   phases.forEach((label, i) => {
     timers.push(setTimeout(() => {
-      phaseEl.textContent = label;
-      const pct = Math.round(((i + 1) / phases.length) * 100);
-      fill.style.width = `${pct}%`;
-      bar.setAttribute('aria-valuenow', String(pct));
+      const pct = (i + 1) / phases.length;
+      if (vr) {
+        setVRPhase(label, pct);
+      } else {
+        const phaseEl = document.getElementById('loading-phase');
+        const fill = document.getElementById('bar-fill');
+        const bar = document.getElementById('loading-bar');
+        if (phaseEl) phaseEl.textContent = label;
+        if (fill) fill.style.width = `${Math.round(pct * 100)}%`;
+        bar?.setAttribute('aria-valuenow', String(Math.round(pct * 100)));
+      }
       ctx.audio.play('sfx.uiConfirm');
     }, step * i));
   });
@@ -66,13 +79,124 @@ export function start(ctx) {
 export function teardown() {
   timers.forEach(clearTimeout);
   timers = [];
+  if (vr) { ctxRef.stage.setScene(null, null); vr = null; }
   ctxRef = null;
 }
 
-/* -------------------------------------------------------------------- */
-/* Default flight-setup animation: capsule orbiting a spinning           */
-/* diagnostic ring with sweeping radar arc. Pure SMIL/CSS SVG.           */
-/* -------------------------------------------------------------------- */
+/* ====================================================================== */
+/* VR rendering — flight-setup hologram in front of the user              */
+/* ====================================================================== */
+
+function mountVR(root, ctx) {
+  // Minimal DOM note for anyone looking at the flat screen while the
+  // experience runs in-headset.
+  root.innerHTML = `
+    <div class="loading-stack">
+      <h1 class="loading-title">Flight Setup In Progress</h1>
+      <p class="loading-phase">Experience running in headset …</p>
+    </div>
+  `;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x03050a);
+  scene.add(new THREE.AmbientLight(0x334866, 1.6));
+  const key = new THREE.PointLight(0x9fd8ff, 8, 12);
+  key.position.set(0, 2.4, 0.5);
+  scene.add(key);
+
+  // Faint starfield so the void has depth.
+  const starGeo = new THREE.BufferGeometry();
+  const pts = [];
+  for (let i = 0; i < 400; i++) {
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(18 + Math.random() * 8);
+    pts.push(v.x, v.y, v.z);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x6fa8cc, size: 0.05 })));
+
+  // Hologram cluster ~2 m in front of the user at chest height.
+  const holo = new THREE.Group();
+  holo.position.set(0, 1.35, -2);
+  scene.add(holo);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.5, 0.015, 12, 80),
+    new THREE.MeshBasicMaterial({ color: 0x4fd8ff, transparent: true, opacity: 0.85 })
+  );
+  holo.add(ring);
+
+  // Progress arc fills as phases complete.
+  const arcMat = new THREE.MeshBasicMaterial({ color: 0xdff6ff });
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.02, 12, 80, 0.01), arcMat);
+  arc.rotation.z = Math.PI / 2;
+  holo.add(arc);
+
+  // Little capsule on orbit.
+  const orbit = new THREE.Group();
+  const capsule = new THREE.Mesh(
+    new THREE.ConeGeometry(0.045, 0.1, 12),
+    new THREE.MeshStandardMaterial({ color: 0xe8edf4, roughness: 0.4 })
+  );
+  capsule.position.x = 0.5;
+  capsule.rotation.z = -Math.PI / 2;
+  orbit.add(capsule);
+  holo.add(orbit);
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 20, 16),
+    new THREE.MeshBasicMaterial({ color: 0x4fd8ff })
+  );
+  holo.add(core);
+
+  // Phase text panel under the hologram.
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 160;
+  const tex = new THREE.CanvasTexture(canvas);
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.172),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  panel.position.set(0, -0.75, 0);
+  holo.add(panel);
+
+  vr = { scene, ring, orbit, arc, canvas, tex, progress: 0 };
+  setVRPhase('Initializing …', 0);
+
+  ctx.stage.rig.position.set(0, 0, 0);
+  ctx.stage.rig.rotation.set(0, 0, 0);
+  ctx.stage.setScene(scene, (dt, t) => {
+    ring.rotation.z = t * 0.6;
+    ring.rotation.x = Math.sin(t * 0.4) * 0.25;
+    orbit.rotation.z = t * 1.4;
+    core.scale.setScalar(1 + Math.sin(t * 3) * 0.15);
+    // Feed the audio layer the listener pose.
+    ctx.audio.setListenerPose(
+      ctx.stage.headWorldPosition(), ctx.stage.headWorldDirection()
+    );
+  });
+}
+
+function setVRPhase(label, pct) {
+  const g = vr.canvas.getContext('2d');
+  g.clearRect(0, 0, 1024, 160);
+  g.fillStyle = '#4fd8ff';
+  g.font = '600 44px monospace';
+  g.textAlign = 'center';
+  g.fillText('FLIGHT SETUP IN PROGRESS', 512, 56);
+  g.fillStyle = '#8ea3c4';
+  g.font = '34px monospace';
+  g.fillText(label, 512, 120);
+  vr.tex.needsUpdate = true;
+
+  // Grow the progress arc (TorusGeometry arc length can't be edited in
+  // place — swap the geometry).
+  vr.arc.geometry.dispose();
+  vr.arc.geometry = new THREE.TorusGeometry(0.56, 0.02, 12, 80, Math.max(0.01, pct * Math.PI * 2));
+}
+
+/* ====================================================================== */
+/* 2D fallback — default flight-setup animation (SMIL/CSS SVG)            */
+/* ====================================================================== */
 
 function defaultFlightSetupSVG() {
   return `
