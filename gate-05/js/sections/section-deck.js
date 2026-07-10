@@ -59,7 +59,7 @@ export function mount(root, ctx) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x04060a, 8, 22);
-  buildDeckInterior(scene);
+  S.env = buildDeckInterior(scene);
   S.port = buildCapsulePort(scene);
   S.specialists = [
     buildSpecialist(scene, new THREE.Vector3(-1.35, 0, -6.4), 0.45),
@@ -171,6 +171,7 @@ function panelTexture(base, line, size = 256, grid = 4) {
 function buildDeckInterior(scene) {
   const { width, depth, height, backZ } = DECK;
   const centerZ = backZ + depth / 2;
+  const animated = [];   // per-frame scenery updaters, run by env.update()
 
   const floorTex = panelTexture('#11161f', '#1f2c3d', 256, 4);
   floorTex.repeat.set(width / 1.5, depth / 1.5);
@@ -239,6 +240,208 @@ function buildDeckInterior(scene) {
   brand.position.set(-DECK.width / 2 + 0.02, 2.45, -3.5);
   brand.rotation.y = Math.PI / 2;
   scene.add(brand);
+
+  // Structural ceiling ribs — arches spanning the deck for depth.
+  const ribMat = new THREE.MeshStandardMaterial({ color: 0x1a222e, metalness: 0.6, roughness: 0.5 });
+  for (let z = backZ + 1; z < backZ + depth; z += 1.8) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, 0.12), ribMat);
+    rib.position.set(0, height - 0.09, z);
+    scene.add(rib);
+  }
+
+  /* Runway guide lights: paired floor insets that chase toward the port,
+     leading the eye (and the walk) to the glowing hatch. */
+  const guideLights = [];
+  for (let z = 1.8; z > backZ + 1.0; z -= 1.05) {
+    for (const sx of [-0.6, 0.6]) {
+      const m = new THREE.Mesh(
+        new THREE.CircleGeometry(0.085, 16),
+        new THREE.MeshBasicMaterial({ color: 0x24303f })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(sx, 0.012, z);
+      scene.add(m);
+      guideLights.push(m);
+    }
+  }
+  animated.push((t) => {
+    for (const m of guideLights) {
+      const wave = Math.sin(t * 3 - (2 - m.position.z) * 0.9) * 0.5 + 0.5;
+      const on = Math.pow(wave, 3);
+      m.material.color.setRGB(0.09 + on * 0.25, 0.24 + on * 0.7, 0.36 + on * 0.6);
+    }
+  });
+
+  // Hazard chevrons framing the threshold at the port.
+  const hazard = new THREE.Mesh(
+    new THREE.PlaneGeometry(width - 0.5, 1.05),
+    new THREE.MeshBasicMaterial({ map: chevronTexture(), transparent: true, opacity: 0.9 })
+  );
+  hazard.rotation.x = -Math.PI / 2;
+  hazard.position.set(0, 0.013, backZ + 0.85);
+  scene.add(hazard);
+
+  // Rotating amber warning beacons on the port-wall corners.
+  const beacons = [];
+  for (const sx of [-1, 1]) {
+    const b = new THREE.Group();
+    b.position.set(sx * (width / 2 - 0.32), 2.85, backZ + 0.28);
+    const housing = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.12, 0.12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x2a2010, metalness: 0.6, roughness: 0.45 })
+    );
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.088, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x6b3d10 })
+    );
+    dome.position.y = 0.06;
+    const beam = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: radialGlowTexture(), color: 0xffab3d, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    beam.scale.setScalar(1.4);
+    beam.position.y = 0.06;
+    const light = new THREE.PointLight(0xffa020, 0, 4.5, 2);
+    light.position.y = 0.06;
+    b.add(housing, dome, beam, light);
+    scene.add(b);
+    beacons.push({ dome, beam, light, phase: sx > 0 ? Math.PI : 0 });
+  }
+  animated.push((t) => {
+    for (const bc of beacons) {
+      const f = Math.pow(Math.sin(t * 2.2 + bc.phase) * 0.5 + 0.5, 4);
+      bc.light.intensity = f * 6;
+      bc.beam.material.opacity = f * 0.8;
+      bc.dome.material.color.setRGB(0.42 + f * 0.58, 0.24 + f * 0.4, 0.06);
+    }
+  });
+
+  // Departures board on the wall opposite the wordmark.
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 1.25),
+    new THREE.MeshBasicMaterial({ map: departuresTexture() })
+  );
+  board.position.set(width / 2 - 0.08, 2.05, -3.4);
+  board.rotation.y = -Math.PI / 2;
+  scene.add(board);
+  const boardBezel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 1.4, 2.75),
+    new THREE.MeshStandardMaterial({ color: 0x0c1119, metalness: 0.5, roughness: 0.5 })
+  );
+  boardBezel.position.set(width / 2 - 0.03, 2.05, -3.4);
+  scene.add(boardBezel);
+  // Blinking "BOARDING" status lamp beside the board.
+  const boardLamp = new THREE.Mesh(
+    new THREE.CircleGeometry(0.045, 16),
+    new THREE.MeshBasicMaterial({ color: 0x39d98a })
+  );
+  boardLamp.position.set(width / 2 - 0.09, 1.63, -2.15);
+  boardLamp.rotation.y = -Math.PI / 2;
+  scene.add(boardLamp);
+  animated.push((t) => {
+    const on = (Math.sin(t * 3.5) > 0);
+    boardLamp.material.color.setRGB(on ? 0.22 : 0.05, on ? 0.85 : 0.2, on ? 0.54 : 0.14);
+  });
+
+  /* Pressure-relief vapor: soft puffs venting from the side valve boxes
+     (the hardware whose hiss is on the audio bus). */
+  const vaporTex = radialGlowTexture();
+  const puffs = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: vaporTex, color: 0xcfe0ff, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      scene.add(s);
+      puffs.push({ s, side, life: 1.4, t: Math.random() * 5, period: 3.5 + Math.random() * 4 });
+    }
+  }
+  animated.push((t, dt) => {
+    for (const p of puffs) {
+      p.t += dt;
+      if (p.t > p.period) { p.t = 0; p.period = 3.5 + Math.random() * 4; }
+      const e = p.t / p.life;
+      if (e <= 1) {
+        p.s.material.opacity = Math.sin(e * Math.PI) * 0.3;
+        p.s.scale.setScalar(0.25 + e * 0.9);
+        p.s.position.set(p.side * (width / 2 - 0.35 - e * 0.6), 2.2 - e * 0.15, -4.2);
+      } else {
+        p.s.material.opacity = 0;
+      }
+    }
+  });
+
+  // Fine dust motes drifting through the light — subtle atmosphere.
+  const dustGeo = new THREE.BufferGeometry();
+  const dpos = [];
+  for (let i = 0; i < 130; i++) dpos.push((Math.random() - 0.5) * width * 0.9, 0.2 + Math.random() * (height - 0.4), backZ + Math.random() * depth);
+  dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dpos, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    color: 0x9fb4d4, size: 0.02, transparent: true, opacity: 0.45, sizeAttenuation: true, depthWrite: false,
+  }));
+  scene.add(dust);
+  animated.push((t) => { dust.rotation.y = t * 0.012; dust.position.y = Math.sin(t * 0.2) * 0.05; });
+
+  return { update(t, dt) { for (const fn of animated) fn(t, dt); } };
+}
+
+/** Yellow/black diagonal hazard chevrons on a transparent strip. */
+function chevronTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 512, 128);
+  g.save();
+  g.beginPath(); g.rect(0, 0, 512, 128); g.clip();
+  const w = 40;
+  for (let x = -128; x < 640; x += w * 2) {
+    g.fillStyle = '#d9a521';
+    g.beginPath();
+    g.moveTo(x, 0); g.lineTo(x + w, 0); g.lineTo(x + w - 90, 128); g.lineTo(x - 90, 128);
+    g.closePath(); g.fill();
+  }
+  g.restore();
+  // Faded top/bottom edges so it sits into the floor.
+  const fade = g.createLinearGradient(0, 0, 0, 128);
+  fade.addColorStop(0, 'rgba(10,14,20,0.55)');
+  fade.addColorStop(0.5, 'rgba(10,14,20,0)');
+  fade.addColorStop(1, 'rgba(10,14,20,0.55)');
+  g.fillStyle = fade; g.fillRect(0, 0, 512, 128);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Airline-style departures board for flight ACL-0500. */
+function departuresTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, 256);
+  bg.addColorStop(0, '#12233a'); bg.addColorStop(1, '#0a1524');
+  g.fillStyle = bg; g.fillRect(0, 0, 512, 256);
+  g.strokeStyle = '#3f74a8'; g.lineWidth = 5; g.strokeRect(8, 8, 496, 240);
+  g.fillStyle = '#7fe6ff';
+  g.font = '700 40px monospace';
+  g.fillText('DEPARTURES', 26, 54);
+  g.fillStyle = '#6d86a8';
+  g.font = '600 22px monospace';
+  g.fillText('AGENT CYBER LINES LTD.', 26, 86);
+  g.strokeStyle = '#274866'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(26, 100); g.lineTo(486, 100); g.stroke();
+  const rows = [
+    ['FLIGHT', 'ACL-0500', '#d7f4ff'],
+    ['CRAFT', 'DRAGON CLASS', '#d7f4ff'],
+    ['GATE', '05', '#d7f4ff'],
+    ['STATUS', 'BOARDING', '#6bffb0'],
+  ];
+  rows.forEach(([k, v, col], i) => {
+    const y = 138 + i * 30;
+    g.fillStyle = '#7f97b8'; g.font = '600 24px monospace'; g.fillText(k, 26, y);
+    g.fillStyle = col; g.font = '700 26px monospace'; g.fillText(v, 220, y);
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function textTexture(text, color) {
@@ -800,6 +1003,7 @@ function frameUpdate(dt, t) {
   }
 
   S.port.userData.update(t);
+  S.env?.update(t, dt);
   for (const sp of S.specialists) sp.update(t);
 
   // Feed the AUDIO LAYER the listener pose for spatialized sound.
