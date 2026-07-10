@@ -24,8 +24,9 @@ import * as agreement from './sections/section-agreement.js';
 import * as loading from './sections/section-loading.js';
 import * as deck from './sections/section-deck.js';
 import * as capsule from './sections/section-capsule.js';
+import * as orbit from './sections/section-orbit.js';
 
-const SECTIONS = { gate, agreement, loading, deck, capsule };
+const SECTIONS = { gate, agreement, loading, deck, capsule, orbit };
 
 const app = document.getElementById('app');
 const fader = document.getElementById('fader');

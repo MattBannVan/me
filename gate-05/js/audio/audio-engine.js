@@ -63,7 +63,22 @@ export class AudioEngine {
         this.registry.set(`${layer}.${name}`, { layer, name, ...def });
       }
     }
+    this._preloadAll();
     await this.resume();
+  }
+
+  /** Fire-and-forget: fetch + decode every URL-backed sound up front so
+      the first play doesn't wait on the network. Failures are ignored —
+      play() falls back to procedural placeholders. */
+  _preloadAll() {
+    for (const [key, def] of this.registry) {
+      if (!def.url || this._buffers.has(def.url)) continue;
+      fetch(def.url)
+        .then((res) => res.arrayBuffer())
+        .then((buf) => this.ctx.decodeAudioData(buf))
+        .then((decoded) => this._buffers.set(def.url, decoded))
+        .catch((e) => console.warn(`[audio] preload failed for ${key}`, e));
+    }
   }
 
   async resume() {
@@ -88,10 +103,18 @@ export class AudioEngine {
     if (!def) { console.warn(`[audio] unknown sound: ${key}`); return null; }
 
     const out = this._outputChain(def, opts);
-    let handle;
+    let handle = null;
     if (def.url) {
-      handle = await this._playBuffer(def, out);
-    } else {
+      // Real asset first; fall back to the procedural placeholder if the
+      // fetch/decode fails (offline, blocked, unsupported codec) so the
+      // experience never goes silent.
+      try {
+        handle = await this._playBuffer(def, out);
+      } catch (e) {
+        console.warn(`[audio] url failed for ${key} — using procedural fallback`, e);
+      }
+    }
+    if (!handle) {
       handle = PROCEDURAL[def.procedural]
         ? PROCEDURAL[def.procedural](this.ctx, out, def)
         : null;

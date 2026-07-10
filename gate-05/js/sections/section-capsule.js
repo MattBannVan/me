@@ -127,7 +127,9 @@ export async function start(ctx) {
   }
 
   await runCapsuleFlightScript(makeActors(ctx));
-  await endFlight(ctx);
+  // Hand off to Orbit Arrival — the VR session stays alive; the sequencer
+  // black-fades the transition.
+  ctx.next();
 }
 
 export function teardown() {
@@ -631,49 +633,13 @@ function makeActors(ctx) {
     },
 
     comm: () => {
-      // Ground control over the cabin speaker — up by the console.
-      ctx.audio.play('voice.groundControl', { position: { x: 0, y: 2.0, z: -1.2 } });
+      // Ground control over the cabin speaker — Quindar keying tone, then
+      // the muffled voice, up by the console.
+      const position = { x: 0, y: 2.0, z: -1.2 };
+      ctx.audio.play('sfx.quindar', { position });
+      ctx.audio.play('voice.groundControl', { position });
     },
   };
-}
-
-/* ====================================================================== */
-/* Flight end — fade out, close the VR session, show the end card         */
-/* ====================================================================== */
-
-async function endFlight(ctx) {
-  window.__gate05BoardingComplete = true;   // deliberate exit — don't reload
-  if (S.xr) {
-    await S.stage.fade(1, ctx.config.fadeMs + 300, 0x000000);
-    await wait(400);
-    await S.stage.endSession();
-    S.stage.renderer.domElement.style.display = 'none';
-  } else {
-    const fader = document.getElementById('fader');
-    fader.classList.remove('is-white');
-    fader.classList.add('is-active');
-    await wait(ctx.config.fadeMs + 300);
-    S.renderer.domElement.style.display = 'none';
-    fader.classList.remove('is-active');
-  }
-  showEndCard();
-}
-
-function showEndCard() {
-  S.root.querySelector('.deck-hud')?.remove();
-  S.root.querySelector('.visor-frame')?.remove();
-  S.root.insertAdjacentHTML('beforeend', `
-    <div style="position:absolute;inset:0;display:grid;place-items:center;background:var(--acl-bg);">
-      <div style="text-align:center;max-width:32rem;padding:1rem;">
-        <p style="font-family:var(--acl-mono);letter-spacing:0.3em;color:var(--acl-cyan);margin:0 0 0.8rem;">AGENT CYBER LINES LTD.</p>
-        <h1 style="margin:0 0 0.6rem;font-size:1.4rem;letter-spacing:0.12em;">WELCOME TO ORBIT</h1>
-        <p style="color:var(--acl-muted);line-height:1.6;margin:0;">
-          Main engine cutoff confirmed — flight ACL-0500 complete.<br/>
-          Next section — ORBIT ARRIVAL — is a future layer of this experience.
-        </p>
-      </div>
-    </div>
-  `);
 }
 
 /* ====================================================================== */
