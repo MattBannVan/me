@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Matt Bannon — Profile</title>
+  <meta name="description" content="Profile of Matt Bannon. Links to the Gate-05 VR experience and Matt's conversations with AI." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23241d34'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23d0bcff'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/site.css" />
+  <style>
+    .profile-card {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      background: linear-gradient(145deg, rgba(79, 55, 139, 0.95), rgba(40, 30, 62, 0.95));
+      border: 1px solid rgba(208, 188, 255, 0.28);
+      border-radius: 28px;
+      padding: 1.75rem;
+      box-shadow: var(--md-elevation-2);
+      margin-bottom: 1.5rem;
+    }
+
+    .avatar-portrait {
+      width: 128px;
+      height: 128px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background:
+        radial-gradient(circle at 50% 32%, #e8c9a8 0 34%, transparent 35%),
+        radial-gradient(circle at 50% 88%, #d0bcff 0 55%, transparent 56%),
+        linear-gradient(160deg, #2a2140, #16121f);
+      border: 3px solid rgba(208, 188, 255, 0.5);
+      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .profile-info h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 700; }
+    .profile-info .tagline { margin: 0.35rem 0 0; color: #e7dfff; font-size: 1rem; }
+    .profile-info .bio { margin: 0.75rem 0 0; color: var(--md-sys-color-on-surface-variant); max-width: 60ch; line-height: 1.5; font-size: 0.95rem; }
+
+    .section-title {
+      margin: 0 0 0.9rem;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--md-sys-color-on-surface-variant);
+      font-weight: 500;
+    }
+
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .link-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      padding: 1.25rem;
+      border-radius: 22px;
+      text-decoration: none;
+      color: inherit;
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid rgba(148, 143, 153, 0.3);
+      box-shadow: var(--md-elevation-1);
+      transition: transform 140ms ease, border-color 140ms ease;
+    }
+    .link-card:hover { transform: translateY(-3px); border-color: rgba(208, 188, 255, 0.55); }
+
+    .link-icon {
+      width: 46px; height: 46px;
+      border-radius: 14px;
+      display: grid; place-items: center;
+      font-size: 1.4rem;
+      background: var(--md-sys-color-primary-container);
+    }
+    .link-card h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+    .link-card p { margin: 0; font-size: 0.88rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.45; }
+    .link-card .go {
+      margin-top: auto;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--md-sys-color-primary);
+    }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">
+    <a class="brand" href="index.html"><span class="brand-dot"></span> Matt Bannon</a>
+    <div class="nav-links">
+      <a href="index.html">Avatar</a>
+      <a href="profile.html" class="active">Profile</a>
+      <a href="ai-chats/index.html">AI Chats</a>
+      <a href="gate-05/index.html">Gate-05 VR</a>
+    </div>
+  </nav>
+
+  <main class="layout">
+    <section class="profile-card">
+      <div class="avatar-portrait" role="img" aria-label="Avatar portrait of Matt Bannon"></div>
+      <div class="profile-info">
+        <h1>Matt Bannon</h1>
+        <p class="tagline">Building a digital clone — 3D avatar, voice, and a self-improving AI brain.</p>
+        <p class="bio">Explore an interactive corner of the web: a 3D avatar you can chat with, an immersive VR experience, and a collection of memorable conversations with AI. This is Matt Bannon Online — a work in progress that keeps getting smarter.</p>
+      </div>
+    </section>
+
+    <h2 class="section-title">Explore</h2>
+    <div class="link-grid">
+      <a class="link-card" href="gate-05/index.html">
+        <div class="link-icon">🚀</div>
+        <h3>Gate-05 VR</h3>
+        <p>Board the Agent Cyber Lines craft from Gate-05 and step into an immersive, scripted VR journey.</p>
+        <span class="go">Enter the experience →</span>
+      </a>
+
+      <a class="link-card" href="ai-chats/index.html">
+        <div class="link-icon">💬</div>
+        <h3>Matt chats with AI</h3>
+        <p>A curated set of memorable conversations with AI models, sortable by date and model, with inline previews.</p>
+        <span class="go">Read the chats →</span>
+      </a>
+
+      <a class="link-card" href="index.html">
+        <div class="link-icon">🧑‍🚀</div>
+        <h3>Digital Avatar</h3>
+        <p>Say hello to the 3D version of me and start a conversation right in the browser.</p>
+        <span class="go">Chat with the avatar →</span>
+      </a>
+    </div>
+  </main>
+
+  <p class="footer-note">Matt Bannon Online · <a href="index.html">Avatar</a> · <a href="ai-chats/index.html">AI Chats</a> · <a href="gate-05/index.html">Gate-05 VR</a></p>
+</body>
+</html>

@@ -1,0 +1,132 @@
+/* ============================================================
+   Matt Bannon Online — shared site styles
+   Material 3 inspired dark theme, kept consistent across pages.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+  --md-sys-color-primary: #d0bcff;
+  --md-sys-color-on-primary: #381e72;
+  --md-sys-color-primary-container: #4f378b;
+  --md-sys-color-on-primary-container: #eaddff;
+  --md-sys-color-surface: #141218;
+  --md-sys-color-surface-container: #211f26;
+  --md-sys-color-surface-container-high: #2b2930;
+  --md-sys-color-on-surface: #e6e0e9;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-outline: #948f99;
+  --md-sys-color-secondary-container: #4a4458;
+  --md-sys-color-on-secondary-container: #e8def8;
+  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --md-elevation-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 6px 14px rgba(0, 0, 0, 0.3);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+  background: radial-gradient(circle at 12% 8%, #241d34 0%, var(--md-sys-color-surface) 42%);
+  color: var(--md-sys-color-on-surface);
+  min-height: 100vh;
+}
+
+a { color: var(--md-sys-color-primary); }
+
+/* ---- Top navigation ---- */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 82%, black);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(148, 143, 153, 0.22);
+}
+
+.site-nav .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  color: var(--md-sys-color-on-surface);
+  font-size: 1.02rem;
+}
+
+.brand .brand-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d0bcff, #7c5cff);
+  box-shadow: 0 0 12px rgba(208, 188, 255, 0.7);
+}
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.nav-links a {
+  text-decoration: none;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.nav-links a:hover { background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
+.nav-links a.active { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+
+/* ---- Buttons ---- */
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.btn:hover { filter: brightness(1.07); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.btn-tonal { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+
+/* ---- Generic surface / layout ---- */
+.layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.surface {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, black);
+  border: 1px solid rgba(148, 143, 153, 0.3);
+  border-radius: 24px;
+  padding: 1.25rem;
+  box-shadow: var(--md-elevation-1);
+}
+
+.footer-note {
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.8rem;
+  padding: 1.5rem 1rem 2.5rem;
+}
