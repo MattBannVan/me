@@ -23,8 +23,9 @@ import * as gate from './sections/section-gate.js';
 import * as agreement from './sections/section-agreement.js';
 import * as loading from './sections/section-loading.js';
 import * as deck from './sections/section-deck.js';
+import * as capsule from './sections/section-capsule.js';
 
-const SECTIONS = { gate, agreement, loading, deck };
+const SECTIONS = { gate, agreement, loading, deck, capsule };
 
 const app = document.getElementById('app');
 const fader = document.getElementById('fader');
@@ -40,7 +41,7 @@ stage.onSessionEnd = () => {
 let current = null;   // { module, el }
 let index = -1;
 
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+import { wait } from './util/wait.js';
 
 async function fadeOut(white = false) {
   if (stage.active) { await stage.fade(1, CONFIG.fadeMs, white ? 0xffffff : 0x000000); return; }
@@ -50,17 +51,21 @@ async function fadeOut(white = false) {
 }
 
 async function fadeIn() {
+  console.debug(`[sequencer] fadeIn (stage.active=${stage.active})`);
   if (stage.active) { await stage.fade(0, CONFIG.fadeMs); return; }
   fader.classList.remove('is-active');
   await wait(CONFIG.fadeMs);
+  console.debug('[sequencer] fadeIn done');
 }
 
 async function show(id, { white = false } = {}) {
   const module = SECTIONS[id];
   if (!module) throw new Error(`Unknown section: ${id}`);
+  console.debug(`[sequencer] show: ${id}`);
 
   if (current) {
     await fadeOut(white);
+    console.debug(`[sequencer] teardown: ${current.el.id}`);
     current.module.teardown?.();
     current.el.remove();
   }
@@ -77,17 +82,26 @@ async function show(id, { white = false } = {}) {
     next: () => next(),
     goTo: (target, opts) => show(target, opts),
   };
-  module.mount(el, ctx);
+  try {
+    module.mount(el, ctx);
+  } catch (e) {
+    console.error(`[sequencer] mount failed for ${id}:`, e);
+    throw e;
+  }
+  console.debug(`[sequencer] mounted: ${id}`);
   index = CONFIG.sequence.indexOf(id);
   current = { module, el };
 
   await fadeIn();
+  console.debug(`[sequencer] start: ${id}`);
   module.start?.(ctx);
 }
 
 function next() {
   const id = CONFIG.sequence[index + 1];
-  if (id) show(id, { white: CONFIG.sequence[index] === 'loading' });
+  // White transitions: into the deck (loading→deck) and through the
+  // glowing port into the capsule (deck→capsule).
+  if (id) show(id, { white: ['loading', 'deck'].includes(CONFIG.sequence[index]) });
 }
 
 show(CONFIG.sequence[0]);

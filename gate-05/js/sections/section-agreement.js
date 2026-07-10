@@ -5,6 +5,8 @@
  * and agree before boarding continues. Declining returns to the gate.
  */
 
+import { wait } from '../util/wait.js';
+
 export const id = 'agreement';
 
 let ctxRef = null;
@@ -90,11 +92,12 @@ async function onAccept() {
   ctxRef.next();
 }
 
-function onDecline() {
+async function onDecline() {
   const note = document.getElementById('decline-note');
   note.classList.add('is-visible');
   // Give the passenger a beat to read the notice, then back to the gate.
-  setTimeout(() => ctxRef.goTo('gate'), 1600);
+  await wait(1600);
+  if (ctxRef) ctxRef.goTo('gate');
 }
 
 export function teardown() {

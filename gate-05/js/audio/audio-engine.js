@@ -326,6 +326,107 @@ const PROCEDURAL = {
     return makeHandle(ctx, out, () => {});
   },
 
+  /** Servo whirr + pressure thud of the capsule hatch sealing. */
+  hatchSeal(ctx, out) {
+    const t = ctx.currentTime;
+    // servo whirr
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.linearRampToValueAtTime(90, t + 0.9);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 600;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.25, t);
+    env.gain.linearRampToValueAtTime(0.18, t + 0.85);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    osc.connect(lp).connect(env).connect(out);
+    osc.start(t); osc.stop(t + 1.05);
+    // pressure thud at the end
+    const thud = ctx.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(90, t + 1.0);
+    thud.frequency.exponentialRampToValueAtTime(38, t + 1.25);
+    const tEnv = ctx.createGain();
+    tEnv.gain.setValueAtTime(0.0001, t + 1.0);
+    tEnv.gain.exponentialRampToValueAtTime(0.9, t + 1.05);
+    tEnv.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    thud.connect(tEnv).connect(out);
+    thud.start(t + 1.0); thud.stop(t + 1.55);
+    return makeHandle(ctx, out, () => {});
+  },
+
+  /** Two crisp metallic clicks — harness buckles locking. */
+  harnessClick(ctx, out) {
+    const t = ctx.currentTime;
+    for (const dt of [0, 0.28]) {
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer(ctx, 0.06);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600 + dt * 800;
+      bp.Q.value = 6;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.9, t + dt);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.09);
+      noise.connect(bp).connect(env).connect(out);
+      noise.start(t + dt); noise.stop(t + dt + 0.1);
+    }
+    return makeHandle(ctx, out, () => {});
+  },
+
+  /**
+   * Powered-ascent engine rumble: brown-ish noise + deep sine, with a
+   * built-in ~2.5 s ignition ramp. Loops until stopped (stop() fades out).
+   */
+  engineRumble(ctx, out) {
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx, 4);
+    src.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 160;
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = 32;
+    const subGain = ctx.createGain();
+    subGain.gain.value = 0.5;
+    // slow wobble so the rumble feels alive
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 7.3;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.12;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(1.0, t + 2.5);   // ignition ramp
+    lfo.connect(lfoGain).connect(env.gain);
+    src.connect(lp).connect(env);
+    sub.connect(subGain).connect(env);
+    env.connect(out);
+    src.start(t); sub.start(t); lfo.start(t);
+    return makeHandle(ctx, out, () => { src.stop(); sub.stop(); lfo.stop(); });
+  },
+
+  /** Soft rising three-note chime — "welcome to orbit". */
+  orbitChime(ctx, out) {
+    const t = ctx.currentTime;
+    [523.25, 659.25, 783.99].forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      const env = ctx.createGain();
+      const at = t + i * 0.22;
+      env.gain.setValueAtTime(0.0001, at);
+      env.gain.exponentialRampToValueAtTime(0.4, at + 0.03);
+      env.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+      osc.connect(env).connect(out);
+      osc.start(at); osc.stop(at + 1.0);
+    });
+    return makeHandle(ctx, out, () => {});
+  },
+
   /**
    * Muffled specialist voice: a short murmur of band-limited tone bursts.
    * The voice bus low-pass does the final dulling.

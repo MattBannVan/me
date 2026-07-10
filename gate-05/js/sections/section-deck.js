@@ -28,6 +28,7 @@
 
 import * as THREE from '../vendor/three.module.min.js';
 import { runUserActionScript } from '../script/user-action-script.js';
+import { wait } from '../util/wait.js';
 
 export const id = 'deck';
 
@@ -520,7 +521,7 @@ const GAZE_ZONES = {
 function makeActors(ctx) {
   const p = S.player;
   return {
-    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+    wait,
     hud: (text) => {
       if (S.xr) { S.stage.hud(text); return; }
       S.hudEl.textContent = text || '';
@@ -766,42 +767,10 @@ async function beginBoarding(ctx) {
     }
   });
 
-  // White-out, then the end card.
-  window.__gate05BoardingComplete = true;
-  if (S.xr) {
-    await S.stage.fade(1, ctx.config.fadeMs + 400, 0xffffff);
-    await new Promise((r) => setTimeout(r, 600));
-    await S.stage.endSession();               // back to the flat page…
-    S.stage.renderer.domElement.style.display = 'none';
-    showEndCard(ctx, null);
-  } else {
-    const fader = document.getElementById('fader');
-    fader.classList.add('is-white', 'is-active');
-    await new Promise((r) => setTimeout(r, ctx.config.fadeMs + 400));
-    showEndCard(ctx, fader);
-  }
-}
-
-function showEndCard(ctx, fader) {
-  S.root.querySelector('.deck-hud')?.remove();
-  S.root.querySelector('.visor-frame')?.remove();
-  if (!S.xr) S.renderer.domElement.style.display = 'none';
-  S.root.insertAdjacentHTML('beforeend', `
-    <div style="position:absolute;inset:0;display:grid;place-items:center;background:var(--acl-bg);">
-      <div style="text-align:center;max-width:32rem;padding:1rem;">
-        <p style="font-family:var(--acl-mono);letter-spacing:0.3em;color:var(--acl-cyan);margin:0 0 0.8rem;">AGENT CYBER LINES LTD.</p>
-        <h1 style="margin:0 0 0.6rem;font-size:1.4rem;letter-spacing:0.12em;">BOARDING COMPLETE</h1>
-        <p style="color:var(--acl-muted);line-height:1.6;margin:0;">
-          You are aboard the Dragon crew capsule.<br/>
-          Next section — CAPSULE INTERIOR — is a future layer of this experience.
-        </p>
-      </div>
-    </div>
-  `);
-  if (fader) {
-    fader.classList.remove('is-active');
-    setTimeout(() => fader.classList.remove('is-white'), ctx.config.fadeMs);
-  }
+  // Hand off to the capsule interior. The sequencer white-fades the
+  // transition (stage fade in-headset, DOM fader in 2D) — the VR session
+  // stays alive across sections.
+  ctx.next();
 }
 
 /** 'movie' mode ending: the rig walks itself into the port. */

@@ -25,7 +25,7 @@ export const CONFIG = {
   deckMode: 'open-world',
 
   /** Section execution order. Each id maps to js/sections/section-<id>.js */
-  sequence: ['gate', 'agreement', 'loading', 'deck'],
+  sequence: ['gate', 'agreement', 'loading', 'deck', 'capsule'],
 
   /**
    * VR (WebXR) — once the user accepts the terms, the rest of the
@@ -71,16 +71,22 @@ export const CONFIG = {
     background: {
       deckHum:        { url: null, procedural: 'deckHum',        loop: true, gain: 0.30 },
       pressureValves: { url: null, procedural: 'pressureValves', loop: true, gain: 0.55 },
+      engineRumble:   { url: null, procedural: 'engineRumble',   loop: true, gain: 0.85 },
     },
     sfx: {
-      uiConfirm:  { url: null, procedural: 'uiConfirm',  gain: 0.5 },
-      bootTap:    { url: null, procedural: 'bootTap',    gain: 0.8 },
-      hapticCue:  { url: null, procedural: 'hapticCue',  gain: 0.6 },
-      portEnter:  { url: null, procedural: 'portEnter',  gain: 0.7 },
+      uiConfirm:    { url: null, procedural: 'uiConfirm',    gain: 0.5 },
+      bootTap:      { url: null, procedural: 'bootTap',      gain: 0.8 },
+      hapticCue:    { url: null, procedural: 'hapticCue',    gain: 0.6 },
+      portEnter:    { url: null, procedural: 'portEnter',    gain: 0.7 },
+      hatchSeal:    { url: null, procedural: 'hatchSeal',    gain: 0.7 },
+      harnessClick: { url: null, procedural: 'harnessClick', gain: 0.7 },
+      orbitChime:   { url: null, procedural: 'orbitChime',   gain: 0.45 },
     },
     voice: {
       /** Specialists speak in dull, muffled tones (low-pass voice bus). */
       specialistMurmur: { url: null, procedural: 'muffledVoice', gain: 0.5 },
+      /** Ground control over the cabin comm — same dull, radio-muffled feel. */
+      groundControl:    { url: null, procedural: 'muffledVoice', gain: 0.4 },
     },
   },
 
@@ -91,5 +97,14 @@ export const CONFIG = {
     hapticPatternMs: [60, 40, 120],
     /** Distance (m) from the port at which boarding triggers. */
     portEnterRadius: 0.9,
+  },
+
+  capsule: {
+    /** Countdown length in seconds. */
+    countdownFrom: 5,
+    /** Powered-ascent duration (ms) — engine rumble, shake, sky→space. */
+    ascentMs: 14000,
+    /** How long the CONFIRM button waits before auto-confirming (ms). */
+    confirmTimeoutMs: 12000,
   },
 };

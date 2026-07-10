@@ -17,11 +17,12 @@
  */
 
 import * as THREE from '../vendor/three.module.min.js';
+import { wait } from '../util/wait.js';
 
 export const id = 'loading';
 
 let ctxRef = null;
-let timers = [];
+let running = false;
 let vr = null;   // VR-mode state { scene, ring, capsuleOrbit, arc, phaseTex, … }
 
 export function mount(root, ctx) {
@@ -51,34 +52,35 @@ export function mount(root, ctx) {
   }
 }
 
-export function start(ctx) {
+export async function start(ctx) {
   const { phases, durationMs } = ctx.config.loading;
   const step = durationMs / phases.length;
+  running = true;
 
-  phases.forEach((label, i) => {
-    timers.push(setTimeout(() => {
-      const pct = (i + 1) / phases.length;
-      if (vr) {
-        setVRPhase(label, pct);
-      } else {
-        const phaseEl = document.getElementById('loading-phase');
-        const fill = document.getElementById('bar-fill');
-        const bar = document.getElementById('loading-bar');
-        if (phaseEl) phaseEl.textContent = label;
-        if (fill) fill.style.width = `${Math.round(pct * 100)}%`;
-        bar?.setAttribute('aria-valuenow', String(Math.round(pct * 100)));
-      }
-      ctx.audio.play('sfx.uiConfirm');
-    }, step * i));
-  });
+  for (let i = 0; i < phases.length; i++) {
+    const pct = (i + 1) / phases.length;
+    if (!running) return;
+    if (vr) {
+      setVRPhase(phases[i], pct);
+    } else {
+      const phaseEl = document.getElementById('loading-phase');
+      const fill = document.getElementById('bar-fill');
+      const bar = document.getElementById('loading-bar');
+      if (phaseEl) phaseEl.textContent = phases[i];
+      if (fill) fill.style.width = `${Math.round(pct * 100)}%`;
+      bar?.setAttribute('aria-valuenow', String(Math.round(pct * 100)));
+    }
+    ctx.audio.play('sfx.uiConfirm');
+    await wait(step);
+  }
 
   // All phases complete → fade into the onboarding deck.
-  timers.push(setTimeout(() => ctx.next(), durationMs + 700));
+  await wait(700);
+  if (running) ctx.next();
 }
 
 export function teardown() {
-  timers.forEach(clearTimeout);
-  timers = [];
+  running = false;
   if (vr) { ctxRef.stage.setScene(null, null); vr = null; }
   ctxRef = null;
 }
