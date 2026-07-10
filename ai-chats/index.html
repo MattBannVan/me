@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Matt chats with AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/site.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --md-sys-color-primary: #d0bcff;
+      --md-sys-color-on-primary: #381e72;
+      --md-sys-color-primary-container: #4f378b;
+      --md-sys-color-on-primary-container: #eaddff;
+      --md-sys-color-surface: #141218;
+      --md-sys-color-surface-container: #211f26;
+      --md-sys-color-surface-container-high: #2b2930;
+      --md-sys-color-on-surface: #e6e0e9;
+      --md-sys-color-outline: #948f99;
+      --md-sys-color-secondary-container: #4a4458;
+      --md-sys-color-on-secondary-container: #e8def8;
+      --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+      --md-elevation-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 6px 14px rgba(0, 0, 0, 0.3);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 10%, #241d34 0%, var(--md-sys-color-surface) 40%);
+      color: var(--md-sys-color-on-surface);
+      min-height: 100vh;
+    }
+
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1rem 3rem;
+    }
+
+    .hero {
+      background: linear-gradient(145deg, rgba(79, 55, 139, 0.95), rgba(54, 39, 89, 0.95));
+      border-radius: 28px;
+      padding: 1.5rem;
+      box-shadow: var(--md-elevation-2);
+      margin-bottom: 1.25rem;
+      border: 1px solid rgba(208, 188, 255, 0.25);
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(1.7rem, 4vw, 2.7rem);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin: 0.55rem 0 0;
+      color: #e7dfff;
+      font-size: 1rem;
+    }
+
+    .surface {
+      background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, black);
+      border: 1px solid rgba(148, 143, 153, 0.3);
+      border-radius: 24px;
+      padding: 1rem;
+      box-shadow: var(--md-elevation-1);
+      margin-bottom: 1rem;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      align-items: end;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.8rem;
+      color: #c8c2cf;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    select {
+      width: 100%;
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      border: 1px solid rgba(148, 143, 153, 0.5);
+      border-radius: 12px;
+      padding: 0.6rem 0.7rem;
+      font-size: 0.95rem;
+    }
+
+    .cards {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .chat-card {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid rgba(148, 143, 153, 0.32);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--md-elevation-1);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .chat-title {
+      margin: 0;
+      font-size: 1.08rem;
+      font-weight: 500;
+    }
+
+    .chat-meta {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      color: #cdc6d7;
+      font-size: 0.83rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.26rem 0.62rem;
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      font-size: 0.76rem;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.55rem;
+      align-items: center;
+    }
+
+    a,
+    button {
+      font: inherit;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.46rem 0.88rem;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(1px); }
+
+    .btn-primary {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    .btn-tonal {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+    }
+
+    .preview {
+      border-top: 1px solid rgba(148, 143, 153, 0.25);
+      padding: 0.85rem;
+      display: none;
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    .preview.active {
+      display: block;
+    }
+
+    .preview-note {
+      margin: 0 0 0.55rem;
+      font-size: 0.83rem;
+      color: #c9c2d3;
+    }
+
+    iframe {
+      width: 100%;
+      min-height: 420px;
+      border: 1px solid rgba(148, 143, 153, 0.35);
+      border-radius: 12px;
+      background: #1d1b20;
+    }
+
+    .empty {
+      text-align: center;
+      color: #c8c1d1;
+      padding: 2rem 1rem;
+      border: 1px dashed rgba(148, 143, 153, 0.45);
+      border-radius: 16px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">
+    <a class="brand" href="../index.html"><span class="brand-dot"></span> Matt Bannon</a>
+    <div class="nav-links">
+      <a href="../index.html">Avatar</a>
+      <a href="../profile.html">Profile</a>
+      <a href="index.html" class="active">AI Chats</a>
+      <a href="../gate-05/index.html">Gate-05 VR</a>
+    </div>
+  </nav>
+  <div class="layout">
+    <header class="hero">
+      <h1 class="title">Matt chats with AI</h1>
+      <p class="subtitle">Shared links, sortable by date and AI model, with inline chat preview when the source allows embedding.</p>
+    </header>
+
+    <section class="surface controls" aria-label="Sort controls">
+      <div>
+        <label for="sort-date">Sort by date</label>
+        <select id="sort-date">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </div>
+      <div>
+        <label for="sort-model">Sort by AI model</label>
+        <select id="sort-model">
+          <option value="asc">A → Z</option>
+          <option value="desc">Z → A</option>
+        </select>
+      </div>
+    </section>
+
+    <main id="chat-list" class="cards" aria-live="polite"></main>
+  </div>
+
+  <script>
+    const chatItems = [
+      {
+        title: 'Shared Claude conversation',
+        url: 'https://claude.ai/share/daedda94-d9b0-4027-a474-e1df05db43c7',
+        ai: 'Anthropic Claude',
+        model: 'Claude Sonnet',
+        date: '2026-06-27'
+      }
+    ];
+
+    const list = document.getElementById('chat-list');
+    const sortDate = document.getElementById('sort-date');
+    const sortModel = document.getElementById('sort-model');
+
+    const allowedPreviewHosts = new Set(['claude.ai', 'chatgpt.com', 'chat.openai.com', 'gemini.google.com']);
+
+    const getSafeUrl = (value) => {
+      try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== 'https:') return null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    };
+
+    const canEmbed = (value) => {
+      const parsed = getSafeUrl(value);
+      if (!parsed) return false;
+      const hostname = parsed.hostname.toLowerCase();
+      return allowedPreviewHosts.has(hostname);
+    };
+
+    const formatDate = (iso) => {
+      const parsed = new Date(iso);
+      if (Number.isNaN(parsed.getTime())) return 'Date unavailable';
+      return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    const sortChats = (items) => {
+      const dateSortDirection = sortDate.value === 'asc' ? 1 : -1;
+      const modelSortDirection = sortModel.value === 'asc' ? 1 : -1;
+
+      return [...items].sort((a, b) => {
+        const aDate = typeof a.date === 'string' ? a.date : '';
+        const bDate = typeof b.date === 'string' ? b.date : '';
+        const aModel = typeof a.model === 'string' ? a.model : '';
+        const bModel = typeof b.model === 'string' ? b.model : '';
+        const aAi = typeof a.ai === 'string' ? a.ai : '';
+        const bAi = typeof b.ai === 'string' ? b.ai : '';
+
+        const dateCompare = aDate.localeCompare(bDate) * dateSortDirection;
+        if (dateCompare !== 0) return dateCompare;
+
+        const modelCompare = aModel.localeCompare(bModel) * modelSortDirection;
+        if (modelCompare !== 0) return modelCompare;
+
+        return aAi.localeCompare(bAi);
+      });
+    };
+
+    const render = () => {
+      const sorted = sortChats(chatItems);
+
+      if (!sorted.length) {
+        list.textContent = '';
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No shared chats yet. Add items to the chatItems array in index.html.';
+        list.append(empty);
+        return;
+      }
+
+      list.textContent = '';
+
+      sorted.forEach((chat, index) => {
+        const safeUrl = getSafeUrl(chat.url);
+        const chatTitle = typeof chat.title === 'string' ? chat.title : 'Untitled chat';
+        const chatAi = typeof chat.ai === 'string' ? chat.ai : 'Unknown AI';
+        const chatModel = typeof chat.model === 'string' ? chat.model : 'Unknown model';
+        const chatDate = formatDate(typeof chat.date === 'string' ? chat.date : '');
+
+        const card = document.createElement('article');
+        card.className = 'chat-card';
+
+        const head = document.createElement('div');
+        head.className = 'card-head';
+
+        const titleWrap = document.createElement('div');
+        const title = document.createElement('h2');
+        title.className = 'chat-title';
+        title.textContent = chatTitle;
+
+        const meta = document.createElement('div');
+        meta.className = 'chat-meta';
+
+        [chatAi, chatModel, chatDate].forEach((value) => {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = value;
+          meta.append(chip);
+        });
+
+        titleWrap.append(title, meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const open = document.createElement('a');
+        open.className = 'btn btn-primary';
+        open.textContent = 'Open';
+        if (safeUrl) {
+          open.href = safeUrl.toString();
+          open.target = '_blank';
+          open.rel = 'noopener noreferrer';
+        } else {
+          open.removeAttribute('href');
+          open.style.opacity = '0.6';
+          open.style.pointerEvents = 'none';
+          open.setAttribute('aria-disabled', 'true');
+          open.setAttribute('tabindex', '-1');
+        }
+
+        const toggle = document.createElement('button');
+        toggle.className = 'btn btn-tonal';
+        toggle.type = 'button';
+        toggle.textContent = 'Preview';
+        toggle.disabled = !safeUrl || !canEmbed(chat.url);
+
+        const preview = document.createElement('div');
+        preview.className = 'preview';
+        preview.id = `preview-${index}`;
+
+        const note = document.createElement('p');
+        note.className = 'preview-note';
+        note.textContent = 'If this provider blocks embeds, use Open to view in a new tab.';
+
+        preview.append(note);
+
+        if (safeUrl && canEmbed(chat.url)) {
+          const frame = document.createElement('iframe');
+          frame.src = safeUrl.toString();
+          frame.title = `Preview for ${chatTitle}`;
+          frame.loading = 'lazy';
+          frame.referrerPolicy = 'strict-origin-when-cross-origin';
+          frame.setAttribute('sandbox', 'allow-scripts');
+          preview.append(frame);
+        } else {
+          const unavailable = document.createElement('p');
+          unavailable.className = 'preview-note';
+          unavailable.textContent = 'Preview unavailable for this link.';
+          preview.append(unavailable);
+        }
+
+        toggle.addEventListener('click', () => {
+          const active = preview.classList.toggle('active');
+          toggle.textContent = active ? 'Hide' : 'Preview';
+        });
+
+        actions.append(open, toggle);
+        head.append(titleWrap, actions);
+        card.append(head, preview);
+        list.append(card);
+      });
+    };
+
+    sortDate.addEventListener('change', render);
+    sortModel.addEventListener('change', render);
+    render();
+  </script>
+</body>
+</html>
