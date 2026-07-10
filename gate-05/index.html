@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gate 05 — Agent Cyber Lines Ltd.</title>
+  <meta name="description" content="Departure gate for the Agent Cyber Lines Ltd. VR experience. Board the VR craft from Gate 05." />
+  <link rel="stylesheet" href="css/gate-05.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230c1220'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='14' font-weight='bold' fill='%234fd8ff' text-anchor='middle'%3E05%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!--
+    GATE 05 — Agent Cyber Lines Ltd.
+    ================================
+    The experience is built from layered, editable components executed in sequence:
+
+      SEQUENCE (see js/main.js + js/config.js)
+        1. section-gate       — futuristic departure gate + "Board VR Craft"
+        2. section-agreement  — liability / user agreement / safety warning
+        3. section-loading    — flight setup in progress (animated graphic slot)
+        4. section-deck       — SpaceX onboarding deck (Three.js, scripted → interactive)
+
+      LAYERS
+        AUDIO  (js/audio/audio-engine.js)
+          - background : looping ambient beds (pressure relief valves, deck hum)
+          - sfx        : interactive one-shot effects layered on top
+          - voice      : specialist voices (dull, muffled bus w/ low-pass insert)
+          URL slots live in js/config.js — drop real audio URLs there when provided.
+        VR GRAPHICS (js/sections/section-deck.js)
+          - 3D environment, renderable as a scripted movie ("movie" mode)
+            or a free open world ("open-world" mode) — set in js/config.js.
+        SCRIPT (js/script/user-action-script.js)
+          - declarative beat list controlling the user's body/camera.
+  -->
+
+  <div id="app" aria-live="polite">
+    <!-- Sections mount here, one at a time, by js/main.js -->
+  </div>
+
+  <!-- Full-screen fader used for transitions between sections -->
+  <div id="fader" class="fader" aria-hidden="true"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
