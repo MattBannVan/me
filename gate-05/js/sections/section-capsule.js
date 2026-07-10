@@ -274,7 +274,7 @@ function buildCabin(scene) {
   windowRim.position.z -= 0.02;
   windowRim.rotation.copy(windowDisc.rotation);
   cabin.add(windowRim);
-  const winState = { canvas: winCanvas, tex: winTex, stars: mkStars(90) };
+  const winState = { canvas: winCanvas, tex: winTex, stars: mkStars(90), clouds: mkClouds(9) };
   drawWindow(winState, 0);
 
   // Light spilling in from the window (dims as the sky darkens).
@@ -354,9 +354,59 @@ function buildCabin(scene) {
     userSeat.add(strap);
   }
 
+  const animated = [];
+
+  // Console indicator LEDs along the lower lip — a running blink pattern.
+  const leds = [];
+  const ledColors = [0x39d98a, 0x4fd8ff, 0xffb020, 0x39d98a, 0x4fd8ff, 0xff5a5a];
+  ledColors.forEach((col, i) => {
+    const led = new THREE.Mesh(
+      new THREE.CircleGeometry(0.014, 12),
+      new THREE.MeshBasicMaterial({ color: col })
+    );
+    led.position.set(-0.5 + i * 0.2, -0.22, 0.05);
+    console3d.add(led);
+    leds.push({ led, base: new THREE.Color(col), phase: i * 0.7 });
+  });
+  animated.push((t) => {
+    for (const l of leds) {
+      const b = 0.25 + (Math.sin(t * 3 + l.phase) * 0.5 + 0.5) * 0.75;
+      l.led.material.color.copy(l.base).multiplyScalar(b);
+    }
+  });
+
+  // Overhead switch panel with steady lit buttons — payoff on looking up.
+  const overhead = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.26, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x161d28, metalness: 0.5, roughness: 0.5 })
+  );
+  overhead.position.set(0, H + 0.08, 0.42);
+  overhead.rotation.x = Math.PI / 2 - 0.35;
+  cabin.add(overhead);
+  for (let i = 0; i < 6; i++) {
+    const btn = new THREE.Mesh(
+      new THREE.CircleGeometry(0.018, 10),
+      new THREE.MeshBasicMaterial({ color: [0x39d98a, 0x4fd8ff, 0xffb020][i % 3] })
+    );
+    btn.position.set(-0.17 + (i % 3) * 0.17, 0.05 - Math.floor(i / 3) * 0.1, 0.021);
+    overhead.add(btn);
+  }
+
+  // Fine cabin dust that idles gently and reads the launch shake.
+  const dustGeo = new THREE.BufferGeometry();
+  const dp = [];
+  for (let i = 0; i < 90; i++) dp.push((Math.random() - 0.5) * 2, 0.3 + Math.random() * 2, (Math.random() - 0.5) * 2);
+  dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    color: 0xbcd0ec, size: 0.012, transparent: true, opacity: 0.4, depthWrite: false,
+  }));
+  cabin.add(dust);
+  animated.push((t) => { dust.rotation.y = t * 0.03; });
+
   return {
     group: cabin, displays, button, buttonMat, winState, winLight,
     hatch: { glowDisc, iris, light: hatchLight },
+    update: (t, dt) => { for (const fn of animated) fn(t, dt); },
   };
 }
 
@@ -432,18 +482,77 @@ function mkStars(n) {
   return stars;
 }
 
-/** t01: 0 = daylight on the pad, 1 = orbital black with stars + Earth limb. */
+function mkClouds(n) {
+  const clouds = [];
+  for (let i = 0; i < n; i++) {
+    clouds.push({ x: Math.random(), y: Math.random() * 1.3, r: 0.12 + Math.random() * 0.18 });
+  }
+  return clouds;
+}
+
+/** t01: 0 = daylight on the pad, 1 = orbital black with stars + Earth limb.
+    Paints the whole ascent story: pad sky with sun + clouds and the gantry
+    falling away, a booster-separation flash, the thinning atmosphere, then
+    stars and the Earth limb in orbit. */
 function drawWindow(win, t01) {
   const g = win.canvas.getContext('2d');
   const s = win.canvas.width;
-  const lerp = (a, b) => Math.round(a + (b - a) * t01);
-  const top = `rgb(${lerp(110, 1)},${lerp(160, 2)},${lerp(215, 8)})`;
-  const bottom = `rgb(${lerp(150, 4)},${lerp(190, 8)},${lerp(230, 18)})`;
+  const lerp = (a, b) => (a + (b - a) * t01) | 0;
+
+  // Sky gradient: day-blue on the pad → high-altitude indigo → orbital black.
   const grad = g.createLinearGradient(0, 0, 0, s);
-  grad.addColorStop(0, top);
-  grad.addColorStop(1, bottom);
+  grad.addColorStop(0, `rgb(${lerp(96, 1)},${lerp(150, 2)},${lerp(214, 8)})`);
+  grad.addColorStop(0.55, `rgb(${lerp(140, 2)},${lerp(184, 5)},${lerp(230, 14)})`);
+  grad.addColorStop(1, `rgb(${lerp(176, 4)},${lerp(206, 10)},${lerp(240, 22)})`);
   g.fillStyle = grad;
   g.fillRect(0, 0, s, s);
+
+  // Sun high in the window with a soft glow; dims as the sky darkens.
+  const sunA = 1 - t01 * 0.9;
+  if (sunA > 0) {
+    const sx = s * 0.72, sy = s * 0.24;
+    const sg = g.createRadialGradient(sx, sy, 4, sx, sy, s * 0.34);
+    sg.addColorStop(0, `rgba(255,250,235,${0.95 * sunA})`);
+    sg.addColorStop(0.25, `rgba(255,240,205,${0.5 * sunA})`);
+    sg.addColorStop(1, 'rgba(255,240,205,0)');
+    g.fillStyle = sg;
+    g.fillRect(0, 0, s, s);
+    g.fillStyle = `rgba(255,252,242,${sunA})`;
+    g.beginPath(); g.arc(sx, sy, s * 0.05, 0, Math.PI * 2); g.fill();
+  }
+
+  // Clouds scroll downward and shrink as we climb, gone by ~40% altitude.
+  const cloudA = Math.max(0, 1 - t01 / 0.4);
+  if (cloudA > 0) {
+    g.fillStyle = `rgba(255,255,255,${0.85 * cloudA})`;
+    const scale = 1 - t01 * 0.6;
+    for (const cl of win.clouds) {
+      const y = ((cl.y + t01 * 2.4) % 1.3) * s;
+      g.beginPath();
+      g.ellipse(cl.x * s, y, cl.r * s * scale, cl.r * s * 0.4 * scale, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // Launch gantry sliding away in the first instants after liftoff.
+  if (t01 < 0.14) {
+    const ty = (t01 / 0.14) * s * 1.3;
+    g.fillStyle = '#1b2430';
+    g.fillRect(s * 0.03, ty - s * 0.1, s * 0.13, s * 1.25);
+    g.fillStyle = '#2a3542';
+    for (let i = 0; i < 9; i++) g.fillRect(s * 0.03, ty + i * s * 0.14, s * 0.2, s * 0.028);
+  }
+
+  // Atmospheric limb glow — the blue line of air thinning below.
+  if (t01 > 0.45) {
+    const a = (t01 - 0.45) / 0.55;
+    const band = g.createLinearGradient(0, s * 0.55, 0, s);
+    band.addColorStop(0, 'rgba(0,0,0,0)');
+    band.addColorStop(0.7, `rgba(60,120,190,${0.25 * a})`);
+    band.addColorStop(1, `rgba(150,200,255,${0.55 * a})`);
+    g.fillStyle = band;
+    g.fillRect(0, s * 0.55, s, s * 0.45);
+  }
 
   // Stars fade in once the sky is dark enough.
   const starAlpha = Math.max(0, (t01 - 0.55) / 0.45);
@@ -456,14 +565,25 @@ function drawWindow(win, t01) {
     }
   }
 
+  // Booster-separation flash as we pass ~38% altitude.
+  const fd = Math.abs(t01 - 0.38);
+  if (fd < 0.045) {
+    const fa = 1 - fd / 0.045;
+    const fg = g.createRadialGradient(s * 0.5, s * 0.42, 2, s * 0.5, s * 0.42, s * 0.6);
+    fg.addColorStop(0, `rgba(255,240,210,${0.85 * fa})`);
+    fg.addColorStop(1, 'rgba(255,240,210,0)');
+    g.fillStyle = fg;
+    g.fillRect(0, 0, s, s);
+  }
+
   // Earth limb rising into the bottom of the window near orbit.
   if (t01 > 0.8) {
     const a = (t01 - 0.8) / 0.2;
     const cy = s + s * (1.15 - 0.45 * a);
     g.fillStyle = `rgba(70,130,190,${0.95 * a})`;
     g.beginPath(); g.arc(s / 2, cy, s * 1.05, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = `rgba(190,225,255,${0.8 * a})`;
-    g.lineWidth = 6;
+    g.strokeStyle = `rgba(190,225,255,${0.85 * a})`;
+    g.lineWidth = 8;
     g.beginPath(); g.arc(s / 2, cy, s * 1.05, 0, Math.PI * 2); g.stroke();
   }
   win.tex.needsUpdate = true;
@@ -656,9 +776,11 @@ function frameUpdate(dt, t) {
     S.pitchObj.rotation.x = S.look.pitch;
   }
 
+  const cab = S.cabin;
+  cab.update?.(t, dt);
+
   // Launch shake: jitter the CABIN (never the camera) — the user's head
   // stays the stable reference, which is what keeps this comfortable.
-  const cab = S.cabin;
   if (S.shakeAmp > 0) {
     cab.group.position.set(
       (Math.random() - 0.5) * S.shakeAmp * 2,
