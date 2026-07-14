@@ -200,6 +200,16 @@ export class AudioEngine {
     src.loop = !!def.loop;
     src.connect(out);
     src.start();
+    // Real-world one-shot recordings are rarely cut to the exact length
+    // of their in-scene beat (e.g. a 24s hydraulic clip standing in for
+    // a ~2.5s hatch-seal cue) — `trimSec` clips playback short with a
+    // quick fade instead of requiring the source file itself be edited.
+    if (!def.loop && def.trimSec) {
+      const t = this.ctx.currentTime;
+      out.gain.setValueAtTime(out.gain.value, t + def.trimSec - 0.12);
+      out.gain.linearRampToValueAtTime(0.0001, t + def.trimSec);
+      src.stop(t + def.trimSec + 0.02);
+    }
     return makeHandle(this.ctx, out, () => { try { src.stop(); } catch {} });
   }
 }
@@ -311,6 +321,33 @@ const PROCEDURAL = {
     noise.connect(lp).connect(nEnv).connect(out);
     osc.start(t); osc.stop(t + 0.25);
     noise.start(t); noise.stop(t + 0.1);
+    return makeHandle(ctx, out, () => {});
+  },
+
+  /** Crisp fabric/glove-flex rustle: 3 short bursts of high-passed noise
+      with fast, uneven envelopes — reads as cloth/synthetic fibre
+      catching against itself as the fingers flex. */
+  fabricRustle(ctx, out) {
+    const t = ctx.currentTime;
+    const offsets = [0, 0.09, 0.2];
+    for (const dt of offsets) {
+      const len = 0.05 + Math.random() * 0.04;
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer(ctx, len + 0.02);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2200 + Math.random() * 1800;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 4000 + Math.random() * 2000;
+      bp.Q.value = 0.7;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t + dt);
+      env.gain.exponentialRampToValueAtTime(0.6 + Math.random() * 0.3, t + dt + len * 0.2);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dt + len);
+      noise.connect(hp).connect(bp).connect(env).connect(out);
+      noise.start(t + dt); noise.stop(t + dt + len + 0.02);
+    }
     return makeHandle(ctx, out, () => {});
   },
 

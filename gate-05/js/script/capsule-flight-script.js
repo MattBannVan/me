@@ -80,7 +80,7 @@ export const CAPSULE_FLIGHT_SCRIPT = [
     name: 'cutoff',
     run: async (a) => {
       await a.engineCutoff();
-      a.hud('MAIN ENGINE CUTOFF — WELCOME TO ORBIT');
+      a.hud('SECOND ENGINE CUTOFF — WELCOME TO ORBIT');
       a.comm();
       await a.lookAt('window', 2600);
       await a.wait(4200);

@@ -20,6 +20,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { runCapsuleFlightScript } from '../script/capsule-flight-script.js';
 import { wait } from '../util/wait.js';
+import { loadPbrMaterial, loadTexture } from '../util/assets.js';
 
 export const id = 'capsule';
 
@@ -45,7 +46,7 @@ export function mount(root, ctx) {
   scene.background = new THREE.Color(0x020409);
   S.scene = scene;
 
-  S.cabin = buildCabin(scene);           // everything shakeable lives here
+  S.cabin = buildCabin(scene, ctx.config);   // everything shakeable lives here
 
   if (S.xr) {
     S.renderer = ctx.stage.renderer;
@@ -169,19 +170,26 @@ function panelTex(base, line) {
   return tex;
 }
 
-function buildCabin(scene) {
+function buildCabin(scene, config) {
   const cabin = new THREE.Group();
   scene.add(cabin);
 
+  // Real Crew Dragon reference (verified against SpaceX/NASA press photos):
+  // smooth white composite bulkheads, with a dark, angular console
+  // housing suspended in front of the seats — NOT a uniformly dark
+  // interior. The two materials below are deliberately different.
   const R = 1.5, H = 2.5;
-  const wallTex = panelTex('#141a24', '#20293a');
+  const wallTex = panelTex('#e4e8ee', '#c7ced9');
   wallTex.repeat.set(6, 2);
   const wall = new THREE.Mesh(
     new THREE.CylinderGeometry(R, R * 0.92, H, 32, 1, true),
-    new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.65, metalness: 0.4, side: THREE.BackSide })
+    new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.55, metalness: 0.1, side: THREE.BackSide })
   );
   wall.position.y = H / 2;
   cabin.add(wall);
+  // Real PBR upgrade: smooth white composite (ambientCG Plastic010, CC0).
+  loadPbrMaterial(config.assets.textures.cabin, { repeat: [6, 2], roughness: 0.5, metalness: 0.08, side: THREE.BackSide })
+    .then((mat) => { wall.material = mat; });
 
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(R * 0.92, 32),
@@ -192,27 +200,43 @@ function buildCabin(scene) {
 
   const dome = new THREE.Mesh(
     new THREE.ConeGeometry(R, 0.9, 32, 1, true),
-    new THREE.MeshStandardMaterial({ color: 0x0d1219, roughness: 0.8, side: THREE.BackSide })
+    new THREE.MeshStandardMaterial({ color: 0xd7dde6, roughness: 0.6, side: THREE.BackSide })
   );
   dome.position.y = H + 0.45;
   cabin.add(dome);
 
-  // Soft cabin lighting
-  cabin.add(new THREE.AmbientLight(0x36415a, 1.5));
+  // Soft cabin lighting — brighter ambient now the walls are white, so
+  // the material change actually reads instead of looking under-lit.
+  cabin.add(new THREE.AmbientLight(0x8892a6, 1.8));
   const key = new THREE.PointLight(0xcfe2ff, 5, 6, 1.6);
   key.position.set(0, H - 0.3, 0);
   cabin.add(key);
 
-  /* Console: tilted panel in front of the seat with three displays. */
+  /* Console: tilted dark housing in front of the seat with the flight
+     displays — matches the real Dragon's black console suspended
+     against the white bulkhead, not a uniformly-toned cabin. */
   const console3d = new THREE.Group();
   console3d.position.set(0, 1.05, -1.05);
   console3d.rotation.x = -0.42;
   const consoleBody = new THREE.Mesh(
     new THREE.BoxGeometry(1.5, 0.55, 0.08),
-    new THREE.MeshStandardMaterial({ color: 0x1a212e, roughness: 0.5, metalness: 0.5 })
+    new THREE.MeshStandardMaterial({ color: 0x14171d, roughness: 0.45, metalness: 0.4 })
   );
   console3d.add(consoleBody);
   cabin.add(console3d);
+  // Real PBR upgrade: scratched black plastic (ambientCG Plastic012B, CC0).
+  loadPbrMaterial(config.assets.textures.plastic, { repeat: [2, 1], color: 0x2a2e36, roughness: 0.45, metalness: 0.3 })
+    .then((mat) => { consoleBody.material = mat; });
+
+  // Real-time environment reflection source for glossy surfaces (crew
+  // helmet visors) — a small cube render target updated a few times per
+  // second (see frameUpdate), not every frame, to stay cheap.
+  const envTarget = new THREE.WebGLCubeRenderTarget(128, {
+    generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter,
+  });
+  const envCamera = new THREE.CubeCamera(0.05, 30, envTarget);
+  envCamera.position.set(0, 1.4, -0.3);
+  cabin.add(envCamera);
 
   const mkDisplay = (w, h, x, y) => {
     const canvas = document.createElement('canvas');
@@ -309,9 +333,10 @@ function buildCabin(scene) {
   cabin.add(hatchLight);
 
   /* Seats: the user's recliner (with suited legs + harness straps visible
-     when looking down) and two empty companion seats. */
+     when looking down) and two companion seats, now crewed — real Dragon
+     missions fly with the seats filled, not empty. */
   const seatMat = new THREE.MeshStandardMaterial({ color: 0x11161e, roughness: 0.7 });
-  const suit = new THREE.MeshStandardMaterial({ color: 0xe8edf4, roughness: 0.5 });
+  const suit = buildSuitMaterial(config);
   const strapMat = new THREE.MeshStandardMaterial({ color: 0x2a3444, roughness: 0.6 });
 
   const mkSeat = (x, z, yaw) => {
@@ -330,7 +355,15 @@ function buildCabin(scene) {
     return seat;
   };
   const userSeat = mkSeat(SEAT.pos.x, SEAT.pos.z, 0);
-  cabin.add(userSeat, mkSeat(-0.85, 0.55, 0.35), mkSeat(0.85, 0.55, -0.35));
+  const crewSeatL = mkSeat(-0.85, 0.55, 0.35);
+  const crewSeatR = mkSeat(0.85, 0.55, -0.35);
+  cabin.add(userSeat, crewSeatL, crewSeatR);
+
+  // Two seated crewmates, helmets on for launch (matches real Dragon
+  // photos) — reflective visors pick up the cabin's blue console glow
+  // and white bulkheads via the env cube camera set up above.
+  crewSeatL.add(buildSeatedCrewMember(suit, envTarget));
+  crewSeatR.add(buildSeatedCrewMember(suit, envTarget));
 
   // Suited legs + boots on the user's leg rest (the look-down payoff).
   for (const side of [-1, 1]) {
@@ -404,10 +437,82 @@ function buildCabin(scene) {
   animated.push((t) => { dust.rotation.y = t * 0.03; });
 
   return {
-    group: cabin, displays, button, buttonMat, winState, winLight,
+    group: cabin, displays, button, buttonMat, winState, winLight, envCamera,
     hatch: { glowDisc, iris, light: hatchLight },
     update: (t, dt) => { for (const fn of animated) fn(t, dt); },
   };
+}
+
+/** Suit fabric — same sheen-based cloth material as the deck/player rig
+    (js/sections/section-deck.js), duplicated locally since sections are
+    independent modules; keeps the seated crew and the user's own visible
+    legs/boots consistent. */
+function buildSuitMaterial(config) {
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xe8edf4, roughness: 0.55,
+    sheen: 1, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff),
+  });
+  if (config) {
+    const tex = config.assets.textures.fabric;
+    Promise.all([
+      loadTexture(tex.map, { colorSpace: THREE.SRGBColorSpace, repeat: [2, 2] }),
+      loadTexture(tex.normalMap, { colorSpace: THREE.NoColorSpace, repeat: [2, 2] }),
+      loadTexture(tex.roughnessMap, { colorSpace: THREE.NoColorSpace, repeat: [2, 2] }),
+    ]).then(([map, normalMap, roughnessMap]) => {
+      mat.map = map; mat.normalMap = normalMap; mat.roughnessMap = roughnessMap;
+      mat.needsUpdate = true;
+    });
+  }
+  return mat;
+}
+
+/**
+ * A simply-built seated crewmate: bent legs, resting arms, torso, and a
+ * helmet with a real-time-reflective visor (MeshPhysicalMaterial fed by
+ * the cabin's CubeCamera — see envCamera above and its periodic
+ * .update() call in frameUpdate). Returned already positioned to sit in
+ * a seat built by mkSeat() — add it directly as that seat's child.
+ */
+function buildSeatedCrewMember(suitMat, envTarget) {
+  const g = new THREE.Group();
+  const trim = new THREE.MeshStandardMaterial({ color: 0x2a3444, roughness: 0.55, metalness: 0.3 });
+  const visorMat = new THREE.MeshPhysicalMaterial({
+    color: 0x0a0d12, metalness: 0.9, roughness: 0.08,
+    envMap: envTarget.texture, envMapIntensity: 1.3,
+  });
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.24), suitMat);
+  torso.position.set(0, 0.78, 0.05);
+  torso.rotation.x = 0.15;
+  g.add(torso);
+
+  for (const side of [-1, 1]) {
+    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.4), suitMat);
+    thigh.position.set(side * 0.12, 0.56, -0.2);
+    thigh.rotation.x = 0.35;
+    const shin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.4), suitMat);
+    shin.position.set(side * 0.12, 0.42, -0.55);
+    shin.rotation.x = 0.7;
+    const upperArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), suitMat);
+    upperArm.position.set(side * 0.26, 0.72, 0.1);
+    upperArm.rotation.z = -side * 0.25;
+    const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.28, 0.09), suitMat);
+    forearm.position.set(side * 0.22, 0.5, -0.1);
+    forearm.rotation.x = -0.9;
+    g.add(thigh, shin, upperArm, forearm);
+  }
+
+  const helmet = new THREE.Group();
+  helmet.position.set(0, 1.12, 0.08);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), trim);
+  const visor = new THREE.Mesh(
+    new THREE.SphereGeometry(0.145, 20, 16, -0.6, 1.2, 1.1, 0.9),
+    visorMat
+  );
+  helmet.add(shell, visor);
+  g.add(helmet);
+
+  return g;
 }
 
 /* ---------------------- display canvas painters ----------------------- */
@@ -420,20 +525,38 @@ function screenBase(g, w, h) {
   g.strokeRect(4, 4, w - 8, h - 8);
 }
 
+const HUD_FONT = '"Segoe UI", "Helvetica Neue", system-ui, sans-serif';
+
+/** Small orbit-track glyph — echoes the real Dragon console's globe/orbit
+    readout (verified against SpaceX press photos): a ring with a moving
+    position dot, not a photographic globe (too costly for a live canvas
+    redraw), but the same "you are here in orbit" idea. */
+function drawOrbitGlyph(g, cx, cy, r, e) {
+  g.strokeStyle = '#2a4a68';
+  g.lineWidth = 2;
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#254060';
+  g.beginPath(); g.arc(cx, cy, r * 0.32, 0, Math.PI * 2); g.fill();
+  const a = e * Math.PI * 2 - Math.PI / 2;
+  g.fillStyle = '#6bffb0';
+  g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, 0, Math.PI * 2); g.fill();
+}
+
 function drawTelemetry(d, { alt, vel }) {
   const g = d.canvas.getContext('2d');
   const { width: w, height: h } = d.canvas;
   screenBase(g, w, h);
   g.fillStyle = '#4fd8ff';
-  g.font = '600 34px monospace';
-  g.fillText('TELEMETRY', 28, 56);
+  g.font = `600 32px ${HUD_FONT}`;
+  g.fillText('TELEMETRY', 28, 54);
   g.fillStyle = '#9fe8ff';
-  g.font = '30px monospace';
-  g.fillText(`ALT ${String(Math.round(alt)).padStart(6, ' ')} m`, 28, 130);
-  g.fillText(`VEL ${String(Math.round(vel)).padStart(6, ' ')} m/s`, 28, 190);
+  g.font = `28px ${HUD_FONT}`;
+  g.fillText(`ALT  ${String(Math.round(alt)).padStart(6, ' ')} m`, 28, 128);
+  g.fillText(`VEL  ${String(Math.round(vel)).padStart(6, ' ')} m/s`, 28, 186);
   g.fillStyle = '#55e6a5';
-  g.font = '26px monospace';
-  g.fillText('CABIN 101.3 kPa', 28, 260);
+  g.font = `24px ${HUD_FONT}`;
+  g.fillText('CABIN 101.3 kPa', 28, 254);
+  drawOrbitGlyph(g, w - 62, 68, 34, Math.min(1, alt / 200000));
   d.tex.needsUpdate = true;
 }
 
@@ -443,13 +566,13 @@ function drawStatus(d, big, small) {
   screenBase(g, w, h);
   g.textAlign = 'center';
   g.fillStyle = '#4fd8ff';
-  g.font = '600 30px monospace';
-  g.fillText('ACL-0500 · DRAGON', w / 2, 60);
+  g.font = `600 28px ${HUD_FONT}`;
+  g.fillText('ACL-0500 · DRAGON', w / 2, 58);
   g.fillStyle = '#e8f1ff';
-  g.font = '700 110px monospace';
+  g.font = `700 100px ${HUD_FONT}`;
   g.fillText(big, w / 2, h / 2 + 40);
   g.fillStyle = '#8ea3c4';
-  g.font = '28px monospace';
+  g.font = `26px ${HUD_FONT}`;
   g.fillText(small, w / 2, h - 44);
   g.textAlign = 'left';
   d.tex.needsUpdate = true;
@@ -461,13 +584,13 @@ function drawChecklist(d, done) {
   const { width: w, height: h } = d.canvas;
   screenBase(g, w, h);
   g.fillStyle = '#4fd8ff';
-  g.font = '600 34px monospace';
-  g.fillText('PRE-FLIGHT', 28, 56);
-  g.font = '28px monospace';
+  g.font = `600 32px ${HUD_FONT}`;
+  g.fillText('PRE-FLIGHT', 28, 54);
+  g.font = `26px ${HUD_FONT}`;
   items.forEach((label, i) => {
     const y = 110 + i * 48;
     g.fillStyle = i < done ? '#55e6a5' : '#54627d';
-    g.fillText(`${i < done ? '■' : '□'} ${label}`, 28, y);
+    g.fillText(`${i < done ? '●' : '○'}  ${label}`, 28, y);
   });
   d.tex.needsUpdate = true;
 }
@@ -727,6 +850,19 @@ function makeActors(ctx) {
         S.hapticInterval = setInterval(() => S.stage?.pulseHaptics(0.45, 320), 420);
       }
       const ms = cfg.ascentMs;
+      // Real Falcon 9 / Dragon ascent milestones, timed proportionally
+      // against the real ~9-minute liftoff→SECO profile (liftoff T+0,
+      // max-Q ~T+55s, MECO/stage-sep ~T+2:30, 2nd-stage ignition
+      // immediately after, SECO/orbital insertion at T+9:00) and
+      // compressed onto this section's shortened ascent — not made up.
+      const milestones = [
+        { at: 0.00, big: 'LIFTOFF',  small: 'CLEAR OF TOWER' },
+        { at: 0.10, big: 'MAX-Q',    small: 'MAX DYNAMIC PRESSURE' },
+        { at: 0.28, big: 'MECO',     small: 'STAGE SEPARATION' },
+        { at: 0.33, big: 'ASCENT',   small: '2ND STAGE IGNITION' },
+        { at: 0.88, big: 'ASCENT',   small: 'APPROACHING SECO' },
+      ];
+      let nextMilestone = 0;
       await tween(ms, (e, raw) => {
         // Shake ramps in, holds through max-Q, eases toward cutoff.
         S.shakeAmp = Math.sin(Math.min(raw * 3, 1) * Math.PI / 2) * (1 - raw * 0.55) * 0.006;
@@ -735,7 +871,10 @@ function makeActors(ctx) {
         const alt = 200000 * e * e;
         const vel = 7600 * e;
         drawTelemetry(cab.displays.telemetry, { alt, vel });
-        if (Math.random() < 0.05) drawStatus(cab.displays.status, 'ASCENT', `THROTTLE ${Math.round(96 - raw * 12)}%`);
+        while (nextMilestone < milestones.length && raw >= milestones[nextMilestone].at) {
+          const m = milestones[nextMilestone++];
+          drawStatus(cab.displays.status, m.big, m.small);
+        }
       });
     },
 
@@ -746,7 +885,7 @@ function makeActors(ctx) {
       S.shakeAmp = 0;
       cab.group.position.set(0, 0, 0);
       drawWindow(cab.winState, 1);
-      drawStatus(cab.displays.status, 'ORBIT', 'MECO CONFIRMED');
+      drawStatus(cab.displays.status, 'ORBIT', 'SECO CONFIRMED');
       drawChecklist(cab.displays.checklist, 5);
       ctx.audio.play('sfx.orbitChime');
       if (S.xr) S.stage.pulseHaptics(0.3, 500);
@@ -778,6 +917,22 @@ function frameUpdate(dt, t) {
 
   const cab = S.cabin;
   cab.update?.(t, dt);
+
+  // Refresh the visor reflection a few times a second — cheap enough at
+  // 128px, and the cabin barely changes frame-to-frame so it doesn't
+  // need to run every tick. Skipped in VR: re-pointing the renderer at a
+  // cube target mid-XR-frame is unsupported territory, so headset
+  // visors just keep the last reflection captured before the session
+  // (or its most recent 2D-fallback preview) rather than risk a glitch.
+  if (!S.xr && cab.envCamera) {
+    S.envTimer = (S.envTimer ?? 0) + dt;
+    if (S.envTimer > 0.33) {
+      S.envTimer = 0;
+      cab.envCamera.visible = false;
+      cab.envCamera.update(S.renderer, S.scene);
+      cab.envCamera.visible = true;
+    }
+  }
 
   // Launch shake: jitter the CABIN (never the camera) — the user's head
   // stays the stable reference, which is what keeps this comfortable.

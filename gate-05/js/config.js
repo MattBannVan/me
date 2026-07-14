@@ -81,22 +81,61 @@ export const CONFIG = {
    */
   audio: {
     background: {
-      deckHum:        { url: null, procedural: 'deckHum',        loop: true, gain: 0.30 },
-      pressureValves: { url: null, procedural: 'pressureValves', loop: true, gain: 0.55 },
+      /** Public-domain mechanical drone (Wikimedia Commons), self-hosted. */
+      deckHum: {
+        url: 'assets/audio/deckHum.ogg',
+        procedural: 'deckHum', loop: true, gain: 0.30,
+      },
+      /** Public-domain compressed-air burst loop — pressure-relief hiss. */
+      pressureValves: {
+        url: 'assets/audio/pressureValves.ogg',
+        procedural: 'pressureValves', loop: true, gain: 0.55,
+      },
       engineRumble: {
         url: 'https://upload.wikimedia.org/wikipedia/commons/2/2c/SLS_Test_Fire.mp3',
         procedural: 'engineRumble', loop: true, gain: 0.85,
       },
     },
     sfx: {
-      uiConfirm:    { url: null, procedural: 'uiConfirm',    gain: 0.5 },
-      bootTap:      { url: null, procedural: 'bootTap',      gain: 0.8 },
-      hapticCue:    { url: null, procedural: 'hapticCue',    gain: 0.6 },
-      portEnter:    { url: null, procedural: 'portEnter',    gain: 0.7 },
-      hatchSeal:    { url: null, procedural: 'hatchSeal',    gain: 0.7 },
-      noseCone:     { url: null, procedural: 'hatchSeal',    gain: 0.6 },
-      harnessClick: { url: null, procedural: 'harnessClick', gain: 0.7 },
-      orbitChime:   { url: null, procedural: 'orbitChime',   gain: 0.45 },
+      /** CC0 short digital confirmation blip (Wikimedia Commons). */
+      uiConfirm: {
+        url: 'assets/audio/uiConfirm.ogg',
+        procedural: 'uiConfirm', gain: 0.5,
+      },
+      /** Public-domain dull thud — boot on deck plating. */
+      bootTap: {
+        url: 'assets/audio/bootTap.ogg',
+        procedural: 'bootTap', gain: 0.8,
+      },
+      hapticCue: { url: null, procedural: 'hapticCue', gain: 0.6 },
+      /** Crisp fabric/glove-flex rustle. No usable real recording exists
+          on a directly-downloadable license-clear source (checked
+          Wikimedia Commons — nothing suitable) — stays procedural. */
+      fabricRustle: { url: null, procedural: 'fabricRustle', gain: 0.45 },
+      /** No good real "rising swell into bright light" match found —
+          procedural placeholder stays authoritative for this one. */
+      portEnter: { url: null, procedural: 'portEnter', gain: 0.7 },
+      /** Public-domain hydraulic/pneumatic descent — servo + seal thud.
+          Source clip runs ~24s; trimmed to the ~2.5s the seal beat
+          actually takes (see AudioEngine._playBuffer's `trimSec`). */
+      hatchSeal: {
+        url: 'assets/audio/hatchSeal.ogg', trimSec: 2.5,
+        procedural: 'hatchSeal', gain: 0.7,
+      },
+      noseCone: {
+        url: 'assets/audio/hatchSeal.ogg', trimSec: 2.2,
+        procedural: 'hatchSeal', gain: 0.6,
+      },
+      /** CC0 mechanical click — harness buckle latching. */
+      harnessClick: {
+        url: 'assets/audio/harnessClick.ogg',
+        procedural: 'harnessClick', gain: 0.7,
+      },
+      /** CC0 cabin-chime — "welcome to orbit". */
+      orbitChime: {
+        url: 'assets/audio/orbitChime.ogg',
+        procedural: 'orbitChime', gain: 0.45,
+      },
       /** The real NASA mission-comm keying tone — cues each voice murmur. */
       quindar: {
         url: 'https://upload.wikimedia.org/wikipedia/commons/5/56/Quindar_tones.ogg',
@@ -106,8 +145,13 @@ export const CONFIG = {
     voice: {
       /** Specialists speak in dull, muffled tones (low-pass voice bus). */
       specialistMurmur: { url: null, procedural: 'muffledVoice', gain: 0.5 },
-      /** Ground control over the cabin comm — same dull, radio-muffled feel. */
-      groundControl:    { url: null, procedural: 'muffledVoice', gain: 0.4 },
+      /** Ground control over the cabin comm — real public-domain NASA
+          Apollo 13 "Houston, we've had a problem" clip, dulled by the
+          voice bus low-pass into radio murmur. */
+      groundControl: {
+        url: 'assets/audio/groundControl.ogg',
+        procedural: 'muffledVoice', gain: 0.4,
+      },
       /** Station traffic on the rendezvous channel — real Apollo 15 comm
           check, dulled by the voice bus low-pass into radio murmur. */
       stationComm: {
@@ -124,6 +168,71 @@ export const CONFIG = {
     hapticPatternMs: [60, 40, 120],
     /** Distance (m) from the port at which boarding triggers. */
     portEnterRadius: 0.9,
+  },
+
+  /**
+   * REAL ASSETS — glTF models + PBR texture sets, self-hosted under
+   * gate-05/assets/ (see js/util/assets.js for the loader; every load
+   * resolves `null` on failure so callers keep their procedural-geometry
+   * fallback, the same contract the AUDIO LAYER uses for its URLs).
+   *
+   * Sources (all direct-downloadable, license-clear):
+   *  - metalPlate, floor: Poly Haven (CC0) — dl.polyhaven.org
+   *  - plastic: ambientCG (CC0) — ambientcg.com
+   *  - earth day/clouds: Solar System Scope textures, NASA-sourced
+   *    equirectangular maps mirrored on Wikimedia Commons (CC BY 4.0 —
+   *    attribution: Solar System Scope, solarsystemscope.com/textures)
+   *  - specialists: Kenney "Mini Characters" (CC0) — kenney.nl
+   *  - astronaut: NASA 3D Resources (public domain) — github.com/nasa/NASA-3D-Resources
+   *  - station: Kenney "Space Station Kit" (CC0) — kenney.nl
+   */
+  assets: {
+    textures: {
+      metalPlate: {
+        map: 'assets/textures/metal_plate_diff_1k.jpg',
+        normalMap: 'assets/textures/metal_plate_nor_1k.jpg',
+        roughnessMap: 'assets/textures/metal_plate_rough_1k.jpg',
+      },
+      floor: {
+        map: 'assets/textures/floor_diff_1k.jpg',
+        normalMap: 'assets/textures/floor_nor_1k.jpg',
+        roughnessMap: 'assets/textures/floor_rough_1k.jpg',
+      },
+      plastic: {
+        map: 'assets/textures/plastic_diff_1k.jpg',
+        normalMap: 'assets/textures/plastic_nor_1k.jpg',
+        roughnessMap: 'assets/textures/plastic_rough_1k.jpg',
+      },
+      /** Scuba-suede (technical stretch synthetic) — closest CC0 match to
+          a flight-suit/glove fabric. Applied with sheen shading, not flat
+          MeshStandardMaterial, so it actually reads as cloth. */
+      fabric: {
+        map: 'assets/textures/fabric_diff_1k.jpg',
+        normalMap: 'assets/textures/fabric_nor_1k.jpg',
+        roughnessMap: 'assets/textures/fabric_rough_1k.jpg',
+      },
+      /** Smooth white plastic (ambientCG Plastic010, CC0) — the real
+          Crew Dragon cabin is smooth white composite bulkheads, not
+          gritty industrial metal, so the capsule interior gets its own
+          clean material distinct from the deck's worn diamond-plate. */
+      cabin: {
+        map: 'assets/textures/cabin_diff_1k.jpg',
+        normalMap: 'assets/textures/cabin_nor_1k.jpg',
+        roughnessMap: 'assets/textures/cabin_rough_1k.jpg',
+      },
+    },
+    earth: {
+      day: 'assets/earth/earth_daymap_2k.jpg',
+      clouds: 'assets/earth/earth_clouds_2k.jpg',
+    },
+    models: {
+      specialists: [
+        'assets/models/characters/character-male-a.glb',
+        'assets/models/characters/character-female-a.glb',
+      ],
+      astronaut: 'assets/models/astronaut/astronaut.glb',
+      stationDir: 'assets/models/station/',
+    },
   },
 
   capsule: {

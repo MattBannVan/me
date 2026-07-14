@@ -29,6 +29,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { runUserActionScript } from '../script/user-action-script.js';
 import { wait } from '../util/wait.js';
+import { loadAnimatedModel, cloneModel, loadPbrMaterial, loadTexture } from '../util/assets.js';
 
 export const id = 'deck';
 
@@ -59,12 +60,13 @@ export function mount(root, ctx) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x04060a, 8, 22);
-  S.env = buildDeckInterior(scene);
+  S.env = buildDeckInterior(scene, ctx.config);
   S.port = buildCapsulePort(scene);
   S.specialists = [
-    buildSpecialist(scene, new THREE.Vector3(-1.35, 0, -6.4), 0.45),
-    buildSpecialist(scene, new THREE.Vector3(1.35, 0, -6.4), -0.45),
+    buildSpecialist(scene, new THREE.Vector3(-1.35, 0, -6.4), 0.45, ctx.config, 0),
+    buildSpecialist(scene, new THREE.Vector3(1.35, 0, -6.4), -0.45, ctx.config, 1),
   ];
+  populateGreebles(scene, ctx.config);
   S.scene = scene;
   S.clock = new THREE.Clock();
 
@@ -72,7 +74,7 @@ export function mount(root, ctx) {
     // Shared XR renderer — the headset shows the scene; the flat screen
     // mirrors it. Just leave a note in the DOM.
     S.renderer = ctx.stage.renderer;
-    S.player = buildPlayerRigXR(scene, ctx.stage);
+    S.player = buildPlayerRigXR(scene, ctx.stage, ctx.config);
     root.innerHTML = `
       <div class="loading-stack">
         <h1 class="loading-title">Onboarding Deck</h1>
@@ -87,7 +89,7 @@ export function mount(root, ctx) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   root.appendChild(renderer.domElement);
   S.renderer = renderer;
-  S.player = buildPlayerRig(scene);
+  S.player = buildPlayerRig(scene, ctx.config);
 
   // HUD + visor frame overlays (2D only — in VR the stage HUD is used and
   // the visor is your actual headset).
@@ -168,7 +170,7 @@ function panelTexture(base, line, size = 256, grid = 4) {
   return tex;
 }
 
-function buildDeckInterior(scene) {
+function buildDeckInterior(scene, config) {
   const { width, depth, height, backZ } = DECK;
   const centerZ = backZ + depth / 2;
   const animated = [];   // per-frame scenery updaters, run by env.update()
@@ -186,6 +188,15 @@ function buildDeckInterior(scene) {
   const wallTex = panelTexture('#161c27', '#232f42', 256, 3);
   wallTex.repeat.set(depth / 2.2, height / 2.2);
   const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.7, metalness: 0.35 });
+
+  // Real PBR upgrade: swap the canvas-procedural floor/wall materials for
+  // downloaded texture sets once they've loaded (progressive enhancement —
+  // the scene never waits on the network to look correct).
+  const tex = config.assets.textures;
+  loadPbrMaterial(tex.floor, { repeat: [width / 1.5, depth / 1.5], roughness: 0.95, metalness: 0.15 })
+    .then((mat) => { floor.material = mat; });
+  loadPbrMaterial(tex.metalPlate, { repeat: [depth / 2.2, height / 2.2], roughness: 0.65, metalness: 0.55 })
+    .then((mat) => { wallMat.map = mat.map; wallMat.normalMap = mat.normalMap; wallMat.roughnessMap = mat.roughnessMap; wallMat.needsUpdate = true; });
 
   const mkWall = (w, h, pos, rotY) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat);
@@ -386,6 +397,84 @@ function buildDeckInterior(scene) {
   return { update(t, dt) { for (const fn of animated) fn(t, dt); } };
 }
 
+/**
+ * Scatters real modular sci-fi props (Kenney "Space Station Kit", CC0)
+ * along the deck walls for greeble/complexity — crates, conduit pipes,
+ * a wall computer terminal — layered in on top of the procedural set
+ * dressing once each piece loads. Fire-and-forget: the deck already
+ * reads fine before these land, same progressive-enhancement contract
+ * as the rest of the asset pipeline.
+ */
+function populateGreebles(scene, config) {
+  const dir = config.assets.models.stationDir;
+  const at = (name) => `${dir}${name}.glb`;
+
+  const place = async (name, pos, { scale = 1, rotY = 0 } = {}) => {
+    const model = await cloneModel(at(name));
+    if (!model) return;
+    model.scale.setScalar(scale);
+    model.position.copy(pos);
+    model.rotation.y = rotY;
+    scene.add(model);
+    return model;
+  };
+
+  const { width, backZ, depth } = DECK;
+  const wallX = width / 2 - 0.28;
+  const farZ = backZ + depth;
+
+  // Conduit pipe runs along both walls, echoing the procedural cylinder —
+  // full-length dressing plus corner bends and joint rings for detail.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      place('pipe', new THREE.Vector3(side * wallX, 2.35, backZ + 1.4 + i * 2.6), { scale: 1.1, rotY: Math.PI / 2 });
+      place('pipe-ring', new THREE.Vector3(side * wallX, 2.35, backZ + 1.4 + i * 2.6 + 1.3), { scale: 1.1, rotY: Math.PI / 2 });
+    }
+    place('pipe-bend', new THREE.Vector3(side * wallX, 2.35, backZ + 0.6), { scale: 1.1, rotY: side > 0 ? Math.PI : 0 });
+    place('pipe-bend-diagonal', new THREE.Vector3(side * wallX, 2.7, farZ - 0.6), { scale: 1, rotY: side > 0 ? 0 : Math.PI });
+  }
+
+  // Stowed crates/containers of varying sizes near the valve boxes and
+  // back of the deck — cargo the flight crew would actually see stacked.
+  place('container', new THREE.Vector3(-wallX - 0.35, 0, backZ + 4.6), { rotY: 0.3 });
+  place('container-tall', new THREE.Vector3(wallX + 0.35, 0, backZ + 5.4), { rotY: -0.3 });
+  place('container-wide', new THREE.Vector3(-wallX - 0.3, 0, backZ + 2.1), { rotY: 0.15 });
+  place('container-flat', new THREE.Vector3(wallX + 0.3, 0, backZ + 1.9), { rotY: -0.2 });
+  place('container', new THREE.Vector3(-wallX - 0.3, 0, farZ - 1.4), { rotY: 0.5, scale: 0.9 });
+
+  // Wall computer terminals + a display panel opposite the departures
+  // board — extra interactive-looking detail without touching the
+  // scripted sequence.
+  place('computer-wide', new THREE.Vector3(-width / 2 + 0.05, 1.0, backZ + 5.8), { rotY: Math.PI / 2 });
+  place('computer-screen', new THREE.Vector3(-width / 2 + 0.06, 1.55, backZ + 6.6), { rotY: Math.PI / 2, scale: 0.8 });
+  place('wall-detail', new THREE.Vector3(width / 2 - 0.04, 1.6, backZ + 1.4), { rotY: -Math.PI / 2 });
+  place('wall-detail', new THREE.Vector3(width / 2 - 0.04, 1.6, farZ - 1.6), { rotY: -Math.PI / 2 });
+  place('structure-panel', new THREE.Vector3(-width / 2 + 0.04, 2.0, backZ + 3.2), { rotY: Math.PI / 2, scale: 1.1 });
+
+  // A holographic-planet display table near the boarding queue — a nice
+  // thematic touch that also doubles as a light source at knee height.
+  place('table-display-planet', new THREE.Vector3(-1.7, 0, 1.2), { scale: 1.05 });
+
+  // A porthole-style window set into the back wall, off to the side of
+  // the departures board, breaking up the flat panelling.
+  place('wall-window-frame', new THREE.Vector3(width / 2 - 0.02, 2.15, -5.0), { rotY: -Math.PI / 2, scale: 1.1 });
+
+  // NASA astronaut (public-domain) suited mannequin, displayed like a
+  // ready-room EVA suit near the queue — real, non-procedural geometry
+  // anchoring the "you are really about to fly" framing.
+  loadAnimatedModel(config.assets.models.astronaut).then((gltf) => {
+    if (!gltf) return;
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const rawHeight = box.max.y - box.min.y || 1;
+    const scale = 1.95 / rawHeight;    // suited + helmet reads taller than bare human height
+    model.scale.setScalar(scale);
+    model.position.set(-width / 2 + 0.55, -box.min.y * scale, backZ + 1.4);
+    model.rotation.y = Math.PI * 0.15;
+    scene.add(model);
+  });
+}
+
 /** Yellow/black diagonal hazard chevrons on a transparent strip. */
 function chevronTexture() {
   const c = document.createElement('canvas');
@@ -524,7 +613,13 @@ function radialGlowTexture() {
 /* Specialists — black uniforms, body language pointing at the port       */
 /* ====================================================================== */
 
-function buildSpecialist(scene, position, faceYaw) {
+/** Real rig's rest-pose facing, discovered by visual check in-browser —
+    flip to 0 if a future model swap faces the other way. */
+const SPECIALIST_FACING_OFFSET = Math.PI;
+/** Target standing height (m) the loaded character is rescaled to. */
+const SPECIALIST_HEIGHT = 1.72;
+
+function buildSpecialist(scene, position, faceYaw, config, index) {
   const uniform = new THREE.MeshStandardMaterial({ color: 0x0b0d10, roughness: 0.75 });
   const trim = new THREE.MeshStandardMaterial({ color: 0x1c2129, roughness: 0.5, metalness: 0.4 });
   const visor = new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.15, metalness: 0.9 });
@@ -559,16 +654,19 @@ function buildSpecialist(scene, position, faceYaw) {
   glove.position.y = -0.5;
   gestureArm.add(upper, glove);
 
-  g.add(legs, torso, chest, head, idleArm, gestureArm);
+  const proceduralParts = [legs, torso, chest, head, idleArm, gestureArm];
+  g.add(...proceduralParts);
   scene.add(g);
 
   const sp = {
     group: g, head, gestureArm,
     voicePos: g.position.clone().setY(1.62),
     nodOffset: 0,
-    update(t) {
-      // Subtle sway + a repeating open-palm sweep toward the port:
-      // arm raised toward center, angled back — "after you".
+    real: null, // set once the real rig has loaded
+    update(t, dt) {
+      if (this.real) { updateRealSpecialist(this.real, t, dt, this.nodOffset); return; }
+      // Procedural fallback: subtle sway + a repeating open-palm sweep
+      // toward the port — "after you".
       g.position.y = Math.sin(t * 0.9 + position.x) * 0.012;
       const sweep = (Math.sin(t * 1.1) + 1) / 2;               // 0..1
       gestureArm.rotation.z = inner * (0.55 + sweep * 0.3);    // raised toward center
@@ -577,15 +675,119 @@ function buildSpecialist(scene, position, faceYaw) {
       head.rotation.y = Math.sin(t * 0.5 + position.x * 2) * 0.12;
     },
   };
+
+  // Progressive upgrade: swap in a real rigged Kenney character (idle
+  // animation via AnimationMixer, plus the same gesture/nod bone-driven
+  // motion as the fallback above) once it loads. The url is unique per
+  // specialist, so this is loaded — never cloned — avoiding the classic
+  // SkinnedMesh clone/skeleton-rebind pitfall (see js/util/assets.js).
+  const url = config.assets.models.specialists[index % config.assets.models.specialists.length];
+  loadAnimatedModel(url).then((gltf) => {
+    if (!gltf || S?.disposed) return;
+    const { scene: model, animations } = gltf;
+
+    const box = new THREE.Box3().setFromObject(model);
+    const rawHeight = box.max.y - box.min.y || 1;
+    const scale = SPECIALIST_HEIGHT / rawHeight;
+    model.scale.setScalar(scale);
+    model.position.y = -box.min.y * scale;
+    model.rotation.y = SPECIALIST_FACING_OFFSET;
+
+    // Tint the uniform mesh dark ("black uniform" ground crew); leave the
+    // head mesh's original (skin-toned) material untouched. Both meshes
+    // share one material instance in the source file, so clone before
+    // tinting or the head would darken too.
+    const bodyMesh = model.getObjectByName('body-mesh');
+    if (bodyMesh) {
+      // An absolute dark value reads reliably as "black uniform" — a
+      // multiplier on the source atlas's saturated per-character colour
+      // (bright green/purple in the Kenney pack) stays visibly tinted
+      // under this deck's bright ceiling lighting instead of going dark.
+      bodyMesh.material = bodyMesh.material.clone();
+      bodyMesh.material.color.setRGB(0.05, 0.055, 0.065);
+      bodyMesh.material.roughness = 0.8;
+    }
+
+    const mixer = new THREE.AnimationMixer(model);
+    const idleClip = animations.find((c) => c.name === 'idle') || animations[0];
+    if (idleClip) mixer.clipAction(idleClip).play();
+
+    g.add(model);
+    for (const part of proceduralParts) part.visible = false;
+
+    sp.real = {
+      model, mixer,
+      armNode: model.getObjectByName(inner === 1 ? 'arm-right' : 'arm-left'),
+      headNode: model.getObjectByName('head'),
+      armRestQuat: null,
+      headRestQuat: null,
+    };
+    if (sp.real.armNode) sp.real.armRestQuat = sp.real.armNode.quaternion.clone();
+    if (sp.real.headNode) sp.real.headRestQuat = sp.real.headNode.quaternion.clone();
+  });
+
   return sp;
+}
+
+/** Drives the real rig: idle animation as ambient base motion, with the
+    same scripted "after you" arm-sweep and nod overriding their specific
+    bones each frame (applied after the mixer, so it wins for those two
+    bones while idle continues to animate everything else). */
+function updateRealSpecialist(real, t, dt, nodOffset) {
+  real.mixer.update(dt);
+
+  if (real.armNode && real.armRestQuat) {
+    const sweep = (Math.sin(t * 1.1) + 1) / 2;
+    const euler = new THREE.Euler(0.5 + sweep * 0.35, 0, 0.55 + sweep * 0.3);
+    real.armNode.quaternion.copy(real.armRestQuat).multiply(new THREE.Quaternion().setFromEuler(euler));
+  }
+  if (real.headNode && real.headRestQuat) {
+    const look = Math.sin(t * 0.5) * 0.12;
+    const euler = new THREE.Euler(nodOffset, look, 0);
+    real.headNode.quaternion.copy(real.headRestQuat).multiply(new THREE.Quaternion().setFromEuler(euler));
+  }
 }
 
 /* ====================================================================== */
 /* Player rig — suited user: camera, gloved hands, boots                  */
 /* ====================================================================== */
 
-const suitMat = () => new THREE.MeshStandardMaterial({ color: 0xe8edf4, roughness: 0.5 });
-const sealMat = () => new THREE.MeshStandardMaterial({ color: 0x30455f, roughness: 0.4, metalness: 0.5 });
+/** Suit fabric — a physically-based cloth material (sheen layer, the same
+    micro-fiber-scatter term real fabric shaders use) so it reads as cloth
+    even before the real weave texture streams in; the texture then adds
+    the woven-fiber detail on top. */
+function suitMat(config) {
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xe8edf4, roughness: 0.55,
+    sheen: 1, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff),
+  });
+  if (config) {
+    const tex = config.assets.textures.fabric;
+    Promise.all([
+      loadTexture(tex.map, { colorSpace: THREE.SRGBColorSpace, repeat: [2, 2] }),
+      loadTexture(tex.normalMap, { colorSpace: THREE.NoColorSpace, repeat: [2, 2] }),
+      loadTexture(tex.roughnessMap, { colorSpace: THREE.NoColorSpace, repeat: [2, 2] }),
+    ]).then(([map, normalMap, roughnessMap]) => {
+      mat.map = map; mat.normalMap = normalMap; mat.roughnessMap = roughnessMap;
+      mat.needsUpdate = true;
+    });
+  }
+  return mat;
+}
+
+/** Wrist/ankle seal cuffs — dark composite. Upgraded in place with a real
+    PBR plastic texture once it loads (progressive enhancement). */
+function sealMat(config) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0x30455f, roughness: 0.4, metalness: 0.5 });
+  if (config) {
+    loadPbrMaterial(config.assets.textures.plastic, { repeat: [1, 1], color: 0x30455f, roughness: 0.45, metalness: 0.3 })
+      .then((real) => {
+        mat.map = real.map; mat.normalMap = real.normalMap; mat.roughnessMap = real.roughnessMap;
+        mat.needsUpdate = true;
+      });
+  }
+  return mat;
+}
 
 function mkHand(side, suit, seal) {
   const wrist = new THREE.Group();
@@ -617,7 +819,7 @@ function mkBoot(side, suit, seal) {
   return boot;
 }
 
-function buildPlayerRig(scene) {
+function buildPlayerRig(scene, config) {
   const rig = new THREE.Group();          // body position + yaw
   rig.position.set(0, 0, 2.6);
   const pitchObj = new THREE.Group();     // head pitch
@@ -627,8 +829,8 @@ function buildPlayerRig(scene) {
   rig.add(pitchObj);
   scene.add(rig);
 
-  const suit = suitMat();
-  const seal = sealMat();
+  const suit = suitMat(config);
+  const seal = sealMat(config);
 
   const handL = mkHand(-1, suit, seal);
   const handR = mkHand(1, suit, seal);
@@ -655,12 +857,12 @@ function buildPlayerRig(scene) {
  * glove shape is symmetric enough at this scale) and boots sit at the
  * rig's floor.
  */
-function buildPlayerRigXR(scene, stage) {
+function buildPlayerRigXR(scene, stage, config) {
   stage.rig.position.set(0, 0, 2.6);
   stage.rig.rotation.set(0, 0, 0);        // facing -z = the capsule port
 
-  const suit = suitMat();
-  const seal = sealMat();
+  const suit = suitMat(config);
+  const seal = sealMat(config);
 
   const gloves = [];
   stage.controllerGrips.forEach((grip, i) => {
@@ -754,8 +956,12 @@ function makeActors(ctx) {
         p.hands.right.rotation.x = -0.6 + p.hands.raised * 0.8;
       });
     },
-    waveHands: (ms) =>
-      tween(ms, (_, tRaw) => {
+    waveHands: (ms) => {
+      // Crisp fabric-rustle cue at each flex extreme (the sine passes
+      // through 4 peaks over the wave) — audible feedback that the
+      // gloves are actually cloth, not rigid props.
+      let lastPeak = -1;
+      return tween(ms, (_, tRaw) => {
         const s = Math.sin(tRaw * Math.PI * 4);
         p.hands.left.rotation.z = s * 0.55;
         p.hands.right.rotation.z = -s * 0.55;
@@ -763,7 +969,14 @@ function makeActors(ctx) {
         p.hands.right.rotation.y = -s * 0.3;
         p.hands.left.position.x = -0.21 - s * 0.03;
         p.hands.right.position.x = 0.21 + s * 0.03;
-      }),
+
+        const peak = Math.floor(tRaw * 4 - 0.25);
+        if (peak !== lastPeak && Math.abs(s) > 0.9) {
+          lastPeak = peak;
+          ctx.audio.play('sfx.fabricRustle');
+        }
+      });
+    },
     tapLeftBoot: async (ms) => {
       const boot = p.boots.left;
       const wp = new THREE.Vector3();
@@ -1004,7 +1217,7 @@ function frameUpdate(dt, t) {
 
   S.port.userData.update(t);
   S.env?.update(t, dt);
-  for (const sp of S.specialists) sp.update(t);
+  for (const sp of S.specialists) sp.update(t, dt);
 
   // Feed the AUDIO LAYER the listener pose for spatialized sound.
   const camPos = new THREE.Vector3();

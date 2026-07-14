@@ -18,6 +18,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { runOrbitArrivalScript } from '../script/orbit-arrival-script.js';
 import { wait } from '../util/wait.js';
+import { loadTexture, cloneModel } from '../util/assets.js';
 
 export const id = 'orbit';
 
@@ -40,7 +41,7 @@ export function mount(root, ctx) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000104);
   S.scene = scene;
-  S.world = buildOrbitScene(scene);
+  S.world = buildOrbitScene(scene, ctx.config);
 
   if (S.xr) {
     S.renderer = ctx.stage.renderer;
@@ -146,7 +147,7 @@ export function teardown() {
 /* SCENE — cupola cabin, nose-cone iris, Earth, stars, sun, zero-g props  */
 /* ====================================================================== */
 
-function buildOrbitScene(scene) {
+function buildOrbitScene(scene, config) {
   /* Cabin shell: a shortened version of the capsule around the seat, with
      a wide nose ring ahead where the cone irises open. */
   const cabin = new THREE.Group();
@@ -279,7 +280,9 @@ function buildOrbitScene(scene) {
 
   // Earth: positioned so its limb fills the lower half of the view
   // through the nose ring. Slow self-rotation only (object motion —
-  // comfort-safe); the user never moves.
+  // comfort-safe); the user never moves. Starts on the procedural canvas
+  // texture (instant, zero network wait) and upgrades to the real NASA-
+  // sourced Blue Marble daymap once it streams in.
   const earthTex = new THREE.CanvasTexture(earthCanvas());
   earthTex.generateMipmaps = false;
   earthTex.minFilter = THREE.LinearFilter;
@@ -289,8 +292,13 @@ function buildOrbitScene(scene) {
   );
   earth.position.set(0, -26, -52);
   scene.add(earth);
+  loadTexture(config.assets.earth.day, { colorSpace: THREE.SRGBColorSpace, repeat: [1, 1], wrap: THREE.ClampToEdgeWrapping })
+    .then((tex) => { if (tex) { earth.material.map = tex; earth.material.needsUpdate = true; } });
 
   // Independent cloud shell — same centre, larger radius, its own spin.
+  // The real cloud image is a grayscale luminance mask (no alpha
+  // channel), so it drives alphaMap over a plain white base rather than
+  // `map` — the standard technique for that kind of source image.
   const cloudTex = new THREE.CanvasTexture(cloudCanvas());
   cloudTex.generateMipmaps = false;
   cloudTex.minFilter = THREE.LinearFilter;
@@ -300,6 +308,14 @@ function buildOrbitScene(scene) {
   );
   clouds.position.copy(earth.position);
   scene.add(clouds);
+  loadTexture(config.assets.earth.clouds, { colorSpace: THREE.NoColorSpace, repeat: [1, 1], wrap: THREE.ClampToEdgeWrapping })
+    .then((tex) => {
+      if (!tex) return;
+      clouds.material.map = null;
+      clouds.material.alphaMap = tex;
+      clouds.material.color.set(0xffffff);
+      clouds.material.needsUpdate = true;
+    });
 
   // Two-tone atmosphere: a broad haze plus a tighter, brighter rim.
   const atmo = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -325,7 +341,7 @@ function buildOrbitScene(scene) {
 
   // A distant space station tumbling slowly across the far field — the
   // rendezvous target teased on the end card (STATION DOCKING).
-  const station = buildStation();
+  const station = buildStation(config);
   station.position.set(-46, 12, -104);
   scene.add(station);
 
@@ -383,7 +399,7 @@ function buildOrbitScene(scene) {
 
 /** A compact ISS-style station: central spine, pressurized modules,
     radiators and four gold solar arrays. Reads as a silhouette at range. */
-function buildStation() {
+function buildStation(config) {
   const g = new THREE.Group();
   const hull = new THREE.MeshStandardMaterial({ color: 0xcdd4dd, roughness: 0.5, metalness: 0.6 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x39414d, roughness: 0.6, metalness: 0.5 });
@@ -425,6 +441,27 @@ function buildStation() {
     g.add(boom);
   }
   g.scale.setScalar(1.3);
+
+  // Real modular greebles (Kenney "Space Station Kit", CC0) riding the
+  // truss — the station drifts close enough at times that flat procedural
+  // primitives alone read as too clean; these break up the silhouette.
+  if (config) {
+    const dir = config.assets.models.stationDir;
+    const addPiece = async (name, pos, { scale = 1, rotY = 0, rotZ = 0 } = {}) => {
+      const model = await cloneModel(`${dir}${name}.glb`);
+      if (!model) return;
+      model.scale.setScalar(scale);
+      model.position.copy(pos);
+      model.rotation.set(0, rotY, rotZ);
+      g.add(model);
+    };
+    addPiece('pipe', new THREE.Vector3(0, 0.4, 0), { scale: 1.4, rotY: Math.PI / 2 });
+    addPiece('pipe-bend', new THREE.Vector3(-1.2, 0.3, 0.3), { scale: 1.1 });
+    addPiece('rail', new THREE.Vector3(0.6, 0.55, 0.4), { scale: 1.3, rotY: Math.PI / 2 });
+    addPiece('computer-system', new THREE.Vector3(1.8, 0.5, -0.4), { scale: 1.2, rotY: -0.6 });
+    addPiece('container', new THREE.Vector3(-2.4, -0.4, 0.5), { scale: 1.1, rotZ: 0.3 });
+  }
+
   return g;
 }
 
